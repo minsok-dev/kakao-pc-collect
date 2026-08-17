@@ -1,0 +1,9 @@
+# [변경사유]: 허용 방 검색어 — Enter 시 첫 결과가 목표 방이어야 함
+# id 는 워터마크 키. search 는 카톡 검색창에 넣을 문자열.
+rooms:
+  - id: gangnam_latin
+    search: "강남 라틴클럽"
+    enabled: true
+  # - id: info_room
+  #   search: "정보방!!!!!!!!"
+  #   enabled: true

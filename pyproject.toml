@@ -1,0 +1,35 @@
+# [변경사유]: 카카오톡 PC 준자동 수집 — kakao-import와 분리된 도구 A
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kakao-pc-collect"
+version = "0.1.0"
+description = "카카오톡 PC UI 하이브리드 수집 (txt+서랍 사진) → kakao-import input/raw"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "kdance" }]
+dependencies = [
+  "click>=8.1",
+  "python-dotenv>=1.0",
+  "pywinauto>=0.6.8",
+  "pywin32>=306",
+  "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+kakao-pc-collect = "kakao_pc_collect.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
