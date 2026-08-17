@@ -7,3 +7,23 @@ rooms:
   - id: gangnamton_news
     search: "강남턴 소식방"
     enabled: true
+  # [변경사유]: 수집 대상 방 추가 — id=폴더명, search=카톡 검색 첫 결과
+  # [변경사유]: 검색 결과 많음 — 짧은 키워드 대신 방 제목의 고유 구간 사용
+  - id: hongdae_bonita
+    search: "홍대보니따 오픈채팅방"
+    enabled: true
+  - id: info_latin_korea
+    search: "(전국라틴댄스)"
+    enabled: true
+  - id: gyeonggi_latin_news
+    search: "경기라틴소식방"
+    enabled: true
+  - id: hongton_latin
+    search: "홍턴 라틴클럽"
+    enabled: true
+  - id: musica_bachata
+    search: "musica bachata"
+    enabled: true
+  - id: ksf_salva_tour
+    search: "K.S.F 해외 살바키투어"
+    enabled: true

@@ -6,12 +6,18 @@ from __future__ import annotations
 from kakao_pc_collect.config import PROJECT_ROOT, load_rooms, load_settings
 
 
-def test_enabled_rooms_are_the_two_test_rooms() -> None:
+def test_enabled_rooms_include_collect_targets() -> None:
     rooms = load_rooms(PROJECT_ROOT / "config" / "rooms.yaml")
     enabled = [(r.id, r.search) for r in rooms if r.enabled]
     assert enabled == [
         ("gangnam_latin", "강남 라틴클럽"),
         ("gangnamton_news", "강남턴 소식방"),
+        ("hongdae_bonita", "홍대보니따 오픈채팅방"),
+        ("info_latin_korea", "(전국라틴댄스)"),
+        ("gyeonggi_latin_news", "경기라틴소식방"),
+        ("hongton_latin", "홍턴 라틴클럽"),
+        ("musica_bachata", "musica bachata"),
+        ("ksf_salva_tour", "K.S.F 해외 살바키투어"),
     ]
 
 
