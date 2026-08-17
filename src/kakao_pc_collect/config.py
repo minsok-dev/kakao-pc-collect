@@ -39,6 +39,12 @@ class CoordConfig:
     drawer_client_size: tuple[int, int] = (1100, 800)
     first_photo: tuple[int, int] = (320, 220)
     download: tuple[int, int] = (1050, 60)
+    # [변경사유]: 메인 목록 창 — 검색칸·첫 결과. 헤더 우측(친구 추가)을 피한다.
+    main_client_size: tuple[int, int] = (441, 1032)
+    main_search: tuple[int, int] = (213, 106)
+    first_search_result: tuple[int, int] = (215, 168)
+    # [변경사유]: 검색창 닫힘(Edit=0)일 때만 돋보기 1회. 열려 있으면 누르지 않음(토글).
+    search_icon: tuple[int, int] = (329, 56)
     select_count: int = 50
     preload_arrow_presses: int = 80
     arrow_mode: str = "right_then_down"
@@ -50,6 +56,7 @@ class Settings:
     project_root: Path
     kakao_import_root: Path
     download_dir: Path
+    raw_root: Path
     chats_dir: Path
     photos_dir: Path
     rooms: list[RoomSpec]
@@ -60,6 +67,14 @@ class Settings:
     watermark_path: Path = field(
         default_factory=lambda: PROJECT_ROOT / "data" / "watermarks.json"
     )
+
+    def room_chats_dir(self, room_id: str) -> Path:
+        """[변경사유]: 방별 txt — import 매칭이 섞이지 않게."""
+        return self.raw_root / room_id / "chats"
+
+    def room_photos_dir(self, room_id: str) -> Path:
+        """[변경사유]: 방별 사진."""
+        return self.raw_root / room_id / "photos"
 
 
 def _xy(v: Any, default: tuple[int, int]) -> tuple[int, int]:
@@ -83,6 +98,10 @@ def load_coords(path: Path) -> CoordConfig:
         drawer_client_size=_xy(raw.get("drawer_client_size"), (1100, 800)),
         first_photo=_xy(raw.get("first_photo"), (320, 220)),
         download=_xy(raw.get("download"), (1050, 60)),
+        main_client_size=_xy(raw.get("main_client_size"), (441, 1032)),
+        main_search=_xy(raw.get("main_search"), (213, 106)),
+        first_search_result=_xy(raw.get("first_search_result"), (215, 168)),
+        search_icon=_xy(raw.get("search_icon"), (329, 56)),
         select_count=int(raw.get("select_count") or 50),
         preload_arrow_presses=int(raw.get("preload_arrow_presses") or 80),
         arrow_mode=str(raw.get("arrow_mode") or "right_then_down"),
@@ -137,12 +156,14 @@ def load_settings(
     rooms = load_rooms(rooms_path or (root / "config" / "rooms.yaml"))
     coords = load_coords(coords_path or (root / "config" / "coords.yaml"))
 
+    raw_root = import_root / "input" / "raw"
     return Settings(
         project_root=root,
         kakao_import_root=import_root,
         download_dir=download,
-        chats_dir=import_root / "input" / "raw" / "chats",
-        photos_dir=import_root / "input" / "raw" / "photos",
+        raw_root=raw_root,
+        chats_dir=raw_root / "chats",
+        photos_dir=raw_root / "photos",
         rooms=rooms,
         coords=coords,
         run_import=run_import,

@@ -9,20 +9,25 @@ from pathlib import Path
 from kakao_pc_collect.config import CoordConfig
 from kakao_pc_collect.files import (
     copy_new_images,
+    snapshot_mtimes,
     snapshot_names,
     wait_for_new_files,
 )
 from kakao_pc_collect.logging_util import get_logger
 from kakao_pc_collect.uia_kakao import hwnd_of
 from kakao_pc_collect.win_click import (
+    bring_to_front,
     click_client,
     find_hwnd_by_title_contains,
+    right_anchored_xy,
+    set_client_size,
     window_client_size,
 )
 
 log = get_logger(__name__)
 
 DRAWER_TITLE = "채팅방 서랍"
+FILE_SAVE_TITLE = "파일 저장"
 
 
 def _send(keys: str) -> None:
@@ -38,7 +43,24 @@ def open_drawer(
     dry_run: bool = False,
 ) -> int:
     """☰ → 서랍 → 사진/동영상. 반환=서랍 hwnd."""
-    click_client(room_hwnd, coords.hamburger, dry_run=dry_run, label="hamburger")
+    # [변경사유]: 이미지 뷰어가 앞에 있으면 ☰·키가 빗나감 — 방 창 전경 후 클릭
+    bring_to_front(room_hwnd)
+    time.sleep(0.2)
+    # [변경사유]: 방마다 기억된 너비가 다름 — 캘리브레이션 크기로 맞춘 뒤 ☰
+    set_client_size(room_hwnd, coords.room_client_size[0], coords.room_client_size[1])
+    room_size = window_client_size(room_hwnd)
+    hamburger = right_anchored_xy(
+        coords.hamburger,
+        calibrated_size=coords.room_client_size,
+        actual_size=room_size,
+    )
+    log.info(
+        "hamburger click xy=%s calibrated=%s actual_size=%s",
+        hamburger,
+        coords.hamburger,
+        room_size,
+    )
+    click_client(room_hwnd, hamburger, dry_run=dry_run, label="hamburger")
     time.sleep(0.45)
 
     if coords.use_menu_coords:
@@ -53,7 +75,7 @@ def open_drawer(
             label="photos_submenu",
         )
     else:
-        # Down × N → Right → Down × M → Enter
+        # [변경사유]: ☰ → Down×2 → Right → Down×1 → Enter (사진/동영상)
         for _ in range(max(0, coords.drawer_menu_downs)):
             _send("{DOWN}")
             time.sleep(0.08)
@@ -78,6 +100,8 @@ def open_drawer(
             f"「{DRAWER_TITLE}」 창을 찾지 못함 — coords hamburger/drawer_menu 캘리브레이션"
         )
     w, h = window_client_size(hwnd)
+    set_client_size(hwnd, coords.drawer_client_size[0], coords.drawer_client_size[1])
+    w, h = window_client_size(hwnd)
     ew, eh = coords.drawer_client_size
     if abs(w - ew) > 80 or abs(h - eh) > 80:
         log.warning(
@@ -98,13 +122,43 @@ def _arrow_sequence(coords: CoordConfig, presses: int) -> list[str]:
     elif mode == "down":
         keys = ["{DOWN}"] * presses
     else:
-        # 그리드: 오른쪽으로 cols-1, 다음 줄 Down, 반복
-        for i in range(presses):
-            if (i + 1) % cols == 0:
-                keys.append("{DOWN}")
-            else:
-                keys.append("{RIGHT}")
+        # [변경사유]: 한 키=한 칸 지그재그. 줄 끝 Down 은 같은 열 다음 줄이라 칸이 건너뛰어짐
+        keys = _snake_sequence(presses, cols)
     return keys
+
+
+def _snake_sequence(presses: int, cols: int) -> list[str]:
+    """좌상단에서 가로로 채운 뒤 한 칸 내려 반대 방향."""
+    cols = max(1, int(cols))
+    keys: list[str] = []
+    col = 0
+    direction = 1
+    for _ in range(max(0, presses)):
+        nxt = col + direction
+        if 0 <= nxt < cols:
+            keys.append("{RIGHT}" if direction == 1 else "{LEFT}")
+            col = nxt
+        else:
+            keys.append("{DOWN}")
+            direction = -direction
+    return keys
+
+
+def _home_to_first_tile(coords: CoordConfig) -> None:
+    """
+    위·왼쪽을 더 이상 못 갈 때까지 이동 = 첫 이미지.
+    [변경사유]: first_photo 좌표는 그리드 포커스용. 맨 앞 칸이 아님.
+    """
+    ups = max(40, coords.preload_arrow_presses)
+    lefts = max(10, coords.grid_columns + 4)
+    log.info("home first-tile up=%s left=%s", ups, lefts)
+    for _ in range(ups):
+        _send("{UP}")
+        time.sleep(0.03)
+    for _ in range(lefts):
+        _send("{LEFT}")
+        time.sleep(0.03)
+    time.sleep(0.2)
 
 
 def select_photo_batch(
@@ -115,9 +169,8 @@ def select_photo_batch(
     dry_run: bool = False,
 ) -> None:
     """
-    첫 칸 앵커 → 방향키로 프리로드 → 첫 칸 복귀
-    → (선택적) skip_tiles 만큼 이동 → Shift+방향키로 ≤50칸.
-    skip_tiles: 이전 배치에서 이미 받은 칸 수 (batch_i * select_count).
+    포커스 → 첫 칸 → Shift 없이 칸 로드 → 첫 칸 → skip → Shift 최대 50장.
+    [변경사유]: 방향키로 지나지 않은 칸은 선택이 안 됨. 50 초과 시 다운로드 비활성.
     """
     n = max(1, min(50, coords.select_count))
     skip = max(0, int(skip_tiles))
@@ -130,32 +183,28 @@ def select_photo_batch(
     if dry_run:
         return
 
-    # 2) Shift 없이 프리로드 (가상 스크롤 로딩)
+    _home_to_first_tile(coords)
+
+    # Shift 없이 지나가서 가상스크롤 로드 (초기 화면 밖 칸)
+    log.info("preload tiles=%s skip=%s n=%s", preload, skip, n)
     for key in _arrow_sequence(coords, preload):
         _send(key)
         time.sleep(0.04)
-    time.sleep(0.3)
-
-    # 3) 첫 사진으로 복귀
-    click_client(
-        drawer_hwnd, coords.first_photo, dry_run=False, label="first_photo_reset"
-    )
     time.sleep(0.25)
 
-    # 3b) 이전 배치 칸 건너뛰기
+    _home_to_first_tile(coords)
+
     if skip:
         for key in _arrow_sequence(coords, skip):
             _send(key)
             time.sleep(0.03)
         time.sleep(0.15)
 
-    # 4) Shift+방향키로 n-1 칸 추가 선택 (총 n칸)
     for key in _arrow_sequence(coords, n - 1):
-        # + = Shift down in pywinauto send_keys
         _send("+" + key)
         time.sleep(0.05)
     time.sleep(0.2)
-    log.info("select_photo_batch count=%s skip=%s", n, skip)
+    log.info("select_photo_batch count=%s skip=%s (max 50)", n, skip)
 
 
 def click_download(
@@ -168,6 +217,61 @@ def click_download(
         drawer_hwnd, coords.download, dry_run=dry_run, label="download"
     )
     time.sleep(0.5)
+    if dry_run:
+        return
+    # [변경사유]: 저장 중 다음 배치로 가면 안 됨 — 「파일 저장」창이 닫힐 때까지
+    _wait_file_save_dialog()
+
+
+def _wait_file_save_dialog(
+    *,
+    appear_sec: float = 12.0,
+    complete_sec: float = 180.0,
+) -> None:
+    """제목 「파일 저장」이 떴다가 사라질 때까지. 취소는 누르지 않음."""
+    from kakao_pc_collect.win_click import (
+        find_hwnd_by_title_contains,
+        foreground_hwnd,
+        window_title,
+    )
+
+    started = time.time()
+    seen = False
+    last_beat = 0.0
+    while time.time() - started < appear_sec:
+        hwnd = find_hwnd_by_title_contains(FILE_SAVE_TITLE)
+        fg = window_title(foreground_hwnd())
+        if hwnd is not None or FILE_SAVE_TITLE in (fg or ""):
+            seen = True
+            log.info(
+                "file-save appeared elapsed=%.1fs hwnd=%s fg=%r",
+                time.time() - started,
+                hwnd,
+                fg,
+            )
+            break
+        time.sleep(0.3)
+    if not seen:
+        log.info(
+            "file-save not seen in %.0fs — 폴더 감시로 이어감",
+            appear_sec,
+        )
+        return
+
+    wait_start = time.time()
+    while time.time() - wait_start < complete_sec:
+        elapsed = time.time() - wait_start
+        hwnd = find_hwnd_by_title_contains(FILE_SAVE_TITLE)
+        fg = window_title(foreground_hwnd())
+        gone = hwnd is None and FILE_SAVE_TITLE not in (fg or "")
+        if gone:
+            log.info("file-save closed elapsed=%.1fs", elapsed)
+            return
+        if elapsed - last_beat >= 2.0:
+            log.info("file-save waiting elapsed=%.1fs fg=%r", elapsed, fg)
+            last_beat = elapsed
+        time.sleep(0.4)
+    log.warning("file-save still open after %.0fs", complete_sec)
 
 
 def download_one_batch(
@@ -184,18 +288,21 @@ def download_one_batch(
     반환=이번에 복사된(또는 dry_run이면 감지된) 이미지 파일명.
     """
     room_hwnd = hwnd_of(room_win)
-    before = snapshot_names(download_dir)
-
     drawer_hwnd = open_drawer(room_hwnd, coords, dry_run=dry_run)
     select_photo_batch(
         drawer_hwnd, coords, skip_tiles=skip_tiles, dry_run=dry_run
     )
+    # [변경사유]: 다운로드 직전 스냅샷 — 덮어쓰기도 새 배치로 본다
+    before = snapshot_names(download_dir)
+    before_mtime = snapshot_mtimes(download_dir)
     click_download(drawer_hwnd, coords, dry_run=dry_run)
 
     if dry_run:
         return []
 
-    new_names = wait_for_new_files(download_dir, before=before)
+    new_names = wait_for_new_files(
+        download_dir, before=before, before_mtime=before_mtime
+    )
     copied = copy_new_images(
         download_dir=download_dir,
         photos_dir=photos_dir,

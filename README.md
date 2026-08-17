@@ -1,15 +1,20 @@
 # kakao-pc-collect
 
 카카오톡 PC UI **하이브리드** 수집 도구.  
-`kakao-import-local`과 **분리**되어 있으며, 산출물은 import의 `input/raw/chats` · `input/raw/photos`에 넣는다.
+`kakao-import-local`과 **분리**되어 있으며, 산출물은 방별 폴더에 넣는다.
+
+```text
+kakao-import-local/input/raw/<room_id>/chats/*.txt
+kakao-import-local/input/raw/<room_id>/photos/KakaoTalk_*
+```
 
 계약·실측: [kakao-pc-collect-plan.md](../kakao-import-local/docs/kakao-pc-collect-plan.md)
 
 ## 하는 일
 
-1. 허용 방 검색 → Enter → **Ctrl+S** 로 대화 txt → `chats/`
+1. 허용 방 검색 → Enter → **Ctrl+S** 로 대화 txt → `<room_id>/chats/`
 2. ☰ · 서랍 첫 사진 · 다운로드 **창 클라이언트 상대 좌표 3곳**으로 사진 배치
-3. Documents `카카오톡 받은 파일` → 신규 `KakaoTalk_*.png/jpg`만 이름 유지 복사 → `photos/`
+3. Documents `카카오톡 받은 파일` → 신규 `KakaoTalk_*.png/jpg`만 이름 유지 복사 → `<room_id>/photos/`
 4. 방별 워터마크 스템으로 배치 중단
 5. 성공 시 `kakao-import run` + `similar-detect`만 호출 (**upload 금지**)
 
@@ -49,7 +54,10 @@ kakao-pc-collect calibrate --title "채팅방 서랍" --watch
 # dry-run (실제 클릭 없음)
 kakao-pc-collect run --dry-run
 
-# 한 방만, import 호출 없이
+# 테스트 방 2개, import 호출 없이
+kakao-pc-collect run --room gangnam_latin --room gangnamton_news --no-import
+
+# 한 방만
 kakao-pc-collect run --room gangnam_latin --no-import
 
 # txt만 / 사진만

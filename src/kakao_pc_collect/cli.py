@@ -32,7 +32,12 @@ def main(ctx: click.Context, log_level: str | None) -> None:
 
 
 @main.command("run")
-@click.option("--room", "rooms", multiple=True, help="방 id (rooms.yaml). 여러 번 가능")
+@click.option(
+    "--room",
+    "rooms",
+    multiple=True,
+    help="방 id (rooms.yaml). 생략 시 enabled 방 전부. 여러 번 가능",
+)
 @click.option("--chats-only", is_flag=True, help="txt 내보내기만")
 @click.option("--photos-only", is_flag=True, help="서랍 사진만")
 @click.option("--no-import", is_flag=True, help="수집 후 kakao-import 호출 안 함")
@@ -77,7 +82,7 @@ def cmd_run(
 def cmd_calibrate(title: str | None, watch: bool) -> None:
     """
     현재 커서의 창 클라이언트 상대 좌표를 출력.
-    coords.yaml 의 hamburger / first_photo / download 에 기입.
+    coords.yaml 의 hamburger / first_photo / download / search_icon 에 기입.
     """
     def _once() -> tuple[int, int]:
         hwnd = None
