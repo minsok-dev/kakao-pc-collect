@@ -23,6 +23,24 @@ class RoomSpec:
     id: str
     search: str
     enabled: bool = True
+    # [변경사유]: 오픈 단톡방(open)=Down×2, 일반 단톡방(general)=Down×3
+    # room_type 에 맞게 drawer_menu_downs 기본값을 자동 결정.
+    # rooms.yaml 에서 drawer_menu_downs 를 직접 지정하면 그 값을 우선 사용.
+    room_type: str = "open"       # "open" | "general"
+    drawer_menu_downs: int | None = None   # None → room_type 기본값으로 결정
+
+
+ROOM_TYPE_DEFAULTS: dict[str, int] = {
+    "open": 2,       # 오픈 단톡방 — ☰ → Down×2 → Right → Down×1 → Enter
+    "general": 3,    # 일반 단톡방 — ☰ → Down×3 → Right → Down×1 → Enter
+}
+
+
+def effective_drawer_menu_downs(room: "RoomSpec", coords_default: int = 2) -> int:
+    """방별 실제 drawer_menu_downs 결정 (rooms.yaml 직접 지정 > room_type 기본 > coords 전역)."""
+    if room.drawer_menu_downs is not None:
+        return room.drawer_menu_downs
+    return ROOM_TYPE_DEFAULTS.get(room.room_type, coords_default)
 
 
 @dataclass
@@ -117,11 +135,17 @@ def load_rooms(path: Path) -> list[RoomSpec]:
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     rooms: list[RoomSpec] = []
     for item in raw.get("rooms") or []:
+        # [변경사유]: room_type(open/general)·drawer_menu_downs 방별 지정 지원
+        rtype = str(item.get("room_type") or "open").lower()
+        raw_dmd = item.get("drawer_menu_downs")
+        dmd: int | None = int(raw_dmd) if raw_dmd is not None else None
         rooms.append(
             RoomSpec(
                 id=str(item["id"]),
                 search=str(item["search"]),
                 enabled=bool(item.get("enabled", True)),
+                room_type=rtype,
+                drawer_menu_downs=dmd,
             )
         )
     return rooms

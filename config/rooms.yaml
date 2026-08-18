@@ -1,29 +1,42 @@
 # [변경사유]: 허용 방 검색어 — Enter 시 첫 결과가 목표 방이어야 함
 # id 는 워터마크 키·폴더명. search 는 카톡 검색창에 넣을 문자열.
+#
+# room_type: "open"(오픈 단톡방, drawer Down×2) | "general"(일반 단톡방, drawer Down×3)
+# drawer_menu_downs: 숫자를 직접 쓰면 room_type 기본값을 덮어씀 (캘리브레이션용)
 rooms:
   - id: gangnam_latin
     search: "강남 라틴클럽"
     enabled: true
+    room_type: open    # 오픈 단톡방
   - id: gangnamton_news
     search: "강남턴 소식방"
     enabled: true
+    room_type: open    # 오픈 단톡방
   # [변경사유]: 수집 대상 방 추가 — id=폴더명, search=카톡 검색 첫 결과
   # [변경사유]: 검색 결과 많음 — 짧은 키워드 대신 방 제목의 고유 구간 사용
   - id: hongdae_bonita
     search: "홍대보니따 오픈채팅방"
     enabled: true
+    room_type: open    # 오픈 단톡방
+  # [변경사유]: 일반 단톡방 — 서랍 메뉴 Down×3 (오픈 단톡방 Down×2 와 다름)
   - id: info_latin_korea
     search: "(전국라틴댄스)"
     enabled: true
+    room_type: general  # 일반 단톡방 → drawer Down×3
   - id: gyeonggi_latin_news
     search: "경기라틴소식방"
     enabled: true
+    room_type: open    # 오픈 단톡방 (확인 필요 시 general 로 변경)
   - id: hongton_latin
     search: "홍턴 라틴클럽"
     enabled: true
+    room_type: open    # 오픈 단톡방 (확인 필요 시 general 로 변경)
+  # [변경사유]: 일반 단톡방 — 서랍 메뉴 Down×3
   - id: musica_bachata
     search: "musica bachata"
     enabled: true
+    room_type: general  # 일반 단톡방 → drawer Down×3
   - id: ksf_salva_tour
     search: "K.S.F 해외 살바키투어"
     enabled: true
+    room_type: open    # 오픈 단톡방

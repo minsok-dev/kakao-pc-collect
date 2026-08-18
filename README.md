@@ -8,7 +8,8 @@ kakao-import-local/input/raw/<room_id>/chats/*.txt
 kakao-import-local/input/raw/<room_id>/photos/KakaoTalk_*
 ```
 
-계약·실측: [kakao-pc-collect-plan.md](../kakao-import-local/docs/kakao-pc-collect-plan.md)
+계약·실측: [kakao-pc-collect-plan.md](../kakao-import-local/docs/kakao-pc-collect-plan.md)  
+포스터 vs 잡사진 분류(미구현, import 쪽): [poster-classifier-plan.md](../kakao-import-local/docs/poster-classifier-plan.md)
 
 ## 하는 일
 
@@ -16,7 +17,7 @@ kakao-import-local/input/raw/<room_id>/photos/KakaoTalk_*
 2. ☰ · 서랍 첫 사진 · 다운로드 **창 클라이언트 상대 좌표 3곳**으로 사진 배치
 3. Documents `카카오톡 받은 파일` → 신규 `KakaoTalk_*.png/jpg`만 이름 유지 복사 → `<room_id>/photos/`
 4. 방별 워터마크 스템으로 배치 중단
-5. 성공 시 `kakao-import run` + `similar-detect`만 호출 (**upload 금지**)
+5. 성공 시 `kakao-import run` + `poster-classify` + `similar-detect`만 호출 (**upload 금지**)
 
 ## 설치
 
@@ -77,6 +78,6 @@ kakao-import similar-review → upload --dry-run → upload --no-dry-run
 |------|------|
 | `KAKAO_IMPORT_ROOT` | kakao-import-local 경로 |
 | `KAKAO_DOWNLOAD_DIR` | 카톡 받은 파일 폴더 |
-| `KAKAO_COLLECT_RUN_IMPORT` | `1`이면 수집 후 run+similar-detect |
+| `KAKAO_COLLECT_RUN_IMPORT` | `1`이면 수집 후 run + poster-classify + similar-detect |
 
 워터마크: `data/watermarks.json` (방 id → 마지막 스템)

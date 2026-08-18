@@ -8,7 +8,7 @@ import time
 from datetime import date, timedelta
 from pathlib import Path
 
-from kakao_pc_collect.config import RoomSpec, Settings
+from kakao_pc_collect.config import RoomSpec, Settings, effective_drawer_menu_downs
 from kakao_pc_collect.drawer import (
     click_download,
     open_drawer,
@@ -192,7 +192,11 @@ def collect_room(
 
         log.info("photo batch=%s skip_tiles=%s", batch_i + 1, skip)
 
-        drawer_hwnd = open_drawer(room_hwnd, coords, dry_run=dry_run)
+        # [변경사유]: 방 타입별 drawer_menu_downs — 오픈 단톡방×2, 일반 단톡방×3
+        dmd = effective_drawer_menu_downs(room, coords.drawer_menu_downs)
+        drawer_hwnd = open_drawer(
+            room_hwnd, coords, dry_run=dry_run, drawer_menu_downs_override=dmd
+        )
         select_photo_batch(
             drawer_hwnd,
             coords,
@@ -325,11 +329,12 @@ def run_collect(
 
 
 def _call_kakao_import(settings: Settings) -> None:
-    """수집 후 kakao-import run + similar-detect (upload 호출 금지)."""
+    """수집 후 kakao-import run + poster-classify + similar-detect (upload 호출 금지)."""
     root = settings.kakao_import_root
     log.info("calling kakao-import root=%s", root)
     cmds = [
         ["kakao-import", "run"],
+        ["kakao-import", "poster-classify"],
         ["kakao-import", "similar-detect"],
     ]
     for cmd in cmds:
@@ -342,7 +347,18 @@ def _call_kakao_import(settings: Settings) -> None:
                 py = Path("python")
             alt = [str(py), "-m", "kakao_import", cmd[1]]
             log.info("fallback exec %s", " ".join(alt))
-            subprocess.run(alt, cwd=str(root), check=True)
+            try:
+                subprocess.run(alt, cwd=str(root), check=True)
+            except subprocess.CalledProcessError as exc:
+                # [변경사유]: 분류 실패는 수집 파이프라인을 막지 않음 (fail-open)
+                if cmd[1] == "poster-classify":
+                    log.error("poster-classify failed code=%s — continue", exc.returncode)
+                    continue
+                log.error("kakao-import failed cmd=%s code=%s", cmd, exc.returncode)
+                raise
         except subprocess.CalledProcessError as exc:
+            if cmd[1] == "poster-classify":
+                log.error("poster-classify failed code=%s — continue", exc.returncode)
+                continue
             log.error("kakao-import failed cmd=%s code=%s", cmd, exc.returncode)
             raise

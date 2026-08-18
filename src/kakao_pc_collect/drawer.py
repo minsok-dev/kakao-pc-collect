@@ -41,8 +41,14 @@ def open_drawer(
     coords: CoordConfig,
     *,
     dry_run: bool = False,
+    drawer_menu_downs_override: int | None = None,
 ) -> int:
-    """☰ → 서랍 → 사진/동영상. 반환=서랍 hwnd."""
+    """☰ → 서랍 → 사진/동영상. 반환=서랍 hwnd.
+
+    drawer_menu_downs_override:
+        None  → coords.drawer_menu_downs (coords.yaml 전역값)
+        정수   → 방별 설정 우선 (room_type 에서 결정한 값)
+    """
     # [변경사유]: 이미지 뷰어가 앞에 있으면 ☰·키가 빗나감 — 방 창 전경 후 클릭
     bring_to_front(room_hwnd)
     time.sleep(0.2)
@@ -75,8 +81,20 @@ def open_drawer(
             label="photos_submenu",
         )
     else:
-        # [변경사유]: ☰ → Down×2 → Right → Down×1 → Enter (사진/동영상)
-        for _ in range(max(0, coords.drawer_menu_downs)):
+        # [변경사유]: 방 타입별 Down 횟수 — 오픈 단톡방×2, 일반 단톡방×3
+        # drawer_menu_downs_override 가 있으면 coords 전역값 대신 사용
+        dmd = (
+            drawer_menu_downs_override
+            if drawer_menu_downs_override is not None
+            else coords.drawer_menu_downs
+        )
+        log.info(
+            "drawer_menu_downs=%s (override=%s coords=%s)",
+            dmd,
+            drawer_menu_downs_override,
+            coords.drawer_menu_downs,
+        )
+        for _ in range(max(0, dmd)):
             _send("{DOWN}")
             time.sleep(0.08)
         _send("{RIGHT}")
@@ -282,13 +300,19 @@ def download_one_batch(
     photos_dir: Path,
     skip_tiles: int = 0,
     dry_run: bool = False,
+    drawer_menu_downs_override: int | None = None,
 ) -> list[str]:
     """
     서랍 열고 50칸 선택·다운로드·photos 복사.
     반환=이번에 복사된(또는 dry_run이면 감지된) 이미지 파일명.
+    drawer_menu_downs_override: 방 타입별 Down 횟수 (None=coords 전역값 사용).
     """
     room_hwnd = hwnd_of(room_win)
-    drawer_hwnd = open_drawer(room_hwnd, coords, dry_run=dry_run)
+    # [변경사유]: 방 타입별 drawer_menu_downs 우선 적용
+    drawer_hwnd = open_drawer(
+        room_hwnd, coords, dry_run=dry_run,
+        drawer_menu_downs_override=drawer_menu_downs_override,
+    )
     select_photo_batch(
         drawer_hwnd, coords, skip_tiles=skip_tiles, dry_run=dry_run
     )
