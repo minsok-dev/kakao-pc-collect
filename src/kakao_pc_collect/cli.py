@@ -36,11 +36,16 @@ def main(ctx: click.Context, log_level: str | None) -> None:
     "--room",
     "rooms",
     multiple=True,
-    help="방 id (rooms.yaml). 생략 시 enabled 방 전부. 여러 번 가능",
+    help="방 id (rooms.yaml). 수집+import+upload E2E 한정. 생략 시 enabled 방 수집·import는 전체 raw",
 )
 @click.option("--chats-only", is_flag=True, help="txt 내보내기만")
 @click.option("--photos-only", is_flag=True, help="서랍 사진만")
 @click.option("--no-import", is_flag=True, help="수집 후 kakao-import 호출 안 함")
+@click.option(
+    "--with-upload",
+    is_flag=True,
+    help="import 체인 완료 직후 kakao-import upload --no-dry-run (similar hold 유지)",
+)
 @click.option("--dry-run", is_flag=True, help="클릭·키 입력 없이 경로만 확인")
 @click.pass_context
 def cmd_run(
@@ -49,11 +54,14 @@ def cmd_run(
     chats_only: bool,
     photos_only: bool,
     no_import: bool,
+    with_upload: bool,
     dry_run: bool,
 ) -> None:
-    """허용 방 수집. upload는 호출하지 않음."""
+    """허용 방 수집. 기본은 upload 없음. --with-upload 또는 KAKAO_COLLECT_RUN_UPLOAD=1 이면 완료 후 upload."""
     if chats_only and photos_only:
         raise click.UsageError("--chats-only 와 --photos-only 동시 사용 불가")
+    if no_import and with_upload:
+        raise click.UsageError("--no-import 와 --with-upload 동시 사용 불가")
     settings = ctx.obj["settings"]
     chats = not photos_only
     photos = not chats_only
@@ -64,6 +72,7 @@ def cmd_run(
         photos=photos,
         dry_run=dry_run,
         run_import=False if no_import else None,
+        run_upload=True if with_upload else None,
     )
     click.echo(json.dumps(results, ensure_ascii=False, indent=2))
 

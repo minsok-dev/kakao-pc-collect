@@ -80,6 +80,8 @@ class Settings:
     rooms: list[RoomSpec]
     coords: CoordConfig
     run_import: bool = True
+    # [변경사유]: 수집·import 체인 완료 직후 upload --no-dry-run (시각 분리 스케줄 대신 순차 호출)
+    run_upload: bool = False
     log_level: str = "INFO"
     data_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "data")
     watermark_path: Path = field(
@@ -174,6 +176,13 @@ def load_settings(
         "False",
         "no",
     )
+    # [변경사유]: 기본 0 — 기존 수동 upload 흐름 유지. 스케줄은 1 로 켜서 수집 완료 후 즉시 upload
+    run_upload = (os.getenv("KAKAO_COLLECT_RUN_UPLOAD") or "0").strip() in (
+        "1",
+        "true",
+        "True",
+        "yes",
+    )
     data_dir = root / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -191,6 +200,7 @@ def load_settings(
         rooms=rooms,
         coords=coords,
         run_import=run_import,
+        run_upload=run_upload,
         log_level=os.getenv("LOG_LEVEL") or "INFO",
         data_dir=data_dir,
         watermark_path=data_dir / "watermarks.json",

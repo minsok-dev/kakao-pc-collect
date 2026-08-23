@@ -9,7 +9,8 @@ kakao-import-local/input/raw/<room_id>/photos/KakaoTalk_*
 ```
 
 계약·실측: [kakao-pc-collect-plan.md](../kakao-import-local/docs/kakao-pc-collect-plan.md)  
-포스터 vs 잡사진 분류(미구현, import 쪽): [poster-classifier-plan.md](../kakao-import-local/docs/poster-classifier-plan.md)
+포스터 분류: [poster-classifier-plan.md](../kakao-import-local/docs/poster-classifier-plan.md)  
+스케줄 자동 upload · similar hold · 포스터 재학습: [schedule-auto-upload-and-poster-retrain-design.md](../kakao-import-local/docs/schedule-auto-upload-and-poster-retrain-design.md) §11
 
 ## 하는 일
 
@@ -17,7 +18,9 @@ kakao-import-local/input/raw/<room_id>/photos/KakaoTalk_*
 2. ☰ · 서랍 첫 사진 · 다운로드 **창 클라이언트 상대 좌표 3곳**으로 사진 배치
 3. Documents `카카오톡 받은 파일` → 신규 `KakaoTalk_*.png/jpg`만 이름 유지 복사 → `<room_id>/photos/`
 4. 방별 워터마크 스템으로 배치 중단
-5. 성공 시 `kakao-import run` + `poster-classify` + `similar-detect`만 호출 (**upload 금지**)
+5. 성공 시 `kakao-import run` + `poster-classify --no-review` + `similar-detect` 호출.
+   `KAKAO_COLLECT_RUN_UPLOAD=1` 또는 `--with-upload` 일 때만 이어서 `upload --no-dry-run` (기본은 upload 안 함).
+   (자동 체인에서는 poster-review UI를 띄우지 않음. 수동 리뷰는 `kakao-import poster-review`)
 
 ## 설치
 
@@ -66,11 +69,24 @@ kakao-pc-collect run --chats-only
 kakao-pc-collect run --photos-only
 ```
 
-수집 후 사람 작업:
+수집 후 사람 작업 (similar deferred hold분):
 
 ```text
 kakao-import similar-review → upload --dry-run → upload --no-dry-run
 ```
+
+스케줄 / 로컬에서 수집 **완료 직후** 자동 업로드(similar deferred 는 hold):
+
+```text
+# .env
+KAKAO_COLLECT_RUN_UPLOAD=1
+
+# 또는 한 번만
+kakao-pc-collect run --with-upload
+```
+
+`upload`는 import(run → poster-classify → similar-detect)가 **끝난 뒤** 같은 실행에서 호출된다.  
+upload용으로 시각만 어긋난 별도 스케줄은 쓰지 않는다.
 
 ## 환경 변수
 
@@ -78,6 +94,7 @@ kakao-import similar-review → upload --dry-run → upload --no-dry-run
 |------|------|
 | `KAKAO_IMPORT_ROOT` | kakao-import-local 경로 |
 | `KAKAO_DOWNLOAD_DIR` | 카톡 받은 파일 폴더 |
-| `KAKAO_COLLECT_RUN_IMPORT` | `1`이면 수집 후 run + poster-classify + similar-detect |
+| `KAKAO_COLLECT_RUN_IMPORT` | `1`이면 수집 후 run + poster-classify --no-review + similar-detect |
+| `KAKAO_COLLECT_RUN_UPLOAD` | `1`이면 위 import **완료 직후** `upload --no-dry-run` |
 
 워터마크: `data/watermarks.json` (방 id → 마지막 스템)

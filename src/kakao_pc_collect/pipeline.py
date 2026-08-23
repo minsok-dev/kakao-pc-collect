@@ -285,6 +285,7 @@ def run_collect(
     photos: bool = True,
     dry_run: bool = False,
     run_import: bool | None = None,
+    run_upload: bool | None = None,
 ) -> list[dict]:
     """허용 방 순회 수집."""
     settings.raw_root.mkdir(parents=True, exist_ok=True)
@@ -322,21 +323,49 @@ def run_collect(
             continue
 
     do_import = settings.run_import if run_import is None else run_import
+    do_upload = settings.run_upload if run_upload is None else run_upload
     if do_import and not dry_run:
-        _call_kakao_import(settings)
+        # [변경사유]: import 체인 완료 직후(시각 추정 없이) opt-in 시 upload --no-dry-run
+        # [변경사유]: CLI --room 이 있으면 import/upload 에도 동일 방 집합 전달 (E2E)
+        _call_kakao_import(
+            settings,
+            run_upload=do_upload,
+            room_ids=list(room_ids) if room_ids else None,
+        )
 
     return results
 
 
-def _call_kakao_import(settings: Settings) -> None:
-    """수집 후 kakao-import run + poster-classify + similar-detect (upload 호출 금지)."""
+def _call_kakao_import(
+    settings: Settings,
+    *,
+    run_upload: bool = False,
+    room_ids: list[str] | None = None,
+) -> None:
+    """
+    수집 후 kakao-import run + poster-classify --no-review + similar-detect.
+    run_upload=True 이면 위 체인 **완료 직후** upload --no-dry-run (similar deferred 는 hold).
+    room_ids 있으면 전 단계에 --room 전달.
+    """
     root = settings.kakao_import_root
-    log.info("calling kakao-import root=%s", root)
-    cmds = [
-        ["kakao-import", "run"],
-        ["kakao-import", "poster-classify"],
-        ["kakao-import", "similar-detect"],
+    log.info(
+        "calling kakao-import root=%s run_upload=%s rooms=%s",
+        root,
+        run_upload,
+        room_ids,
+    )
+    room_args: list[str] = []
+    for rid in room_ids or []:
+        room_args.extend(["--room", rid])
+    # [변경사유]: 자동 체인(스케줄/--with-upload)에서 poster-review UI 대기 금지 — classify만 하고 다음 단계로
+    cmds: list[list[str]] = [
+        ["kakao-import", "run", *room_args],
+        ["kakao-import", "poster-classify", "--no-review", *room_args],
+        ["kakao-import", "similar-detect", *room_args],
     ]
+    # [변경사유]: 수집·매칭·similar-detect 가 끝난 뒤에만 upload — 별도 시각 스케줄 불필요
+    if run_upload:
+        cmds.append(["kakao-import", "upload", "--no-dry-run", *room_args])
     for cmd in cmds:
         log.info("exec %s", " ".join(cmd))
         try:
@@ -345,19 +374,20 @@ def _call_kakao_import(settings: Settings) -> None:
             py = root / ".venv" / "Scripts" / "python.exe"
             if not py.is_file():
                 py = Path("python")
-            alt = [str(py), "-m", "kakao_import", cmd[1]]
+            # [변경사유]: upload 는 서브커맨드+플래그 — -m kakao_import 뒤에 그대로 전달
+            alt = [str(py), "-m", "kakao_import", *cmd[1:]]
             log.info("fallback exec %s", " ".join(alt))
             try:
                 subprocess.run(alt, cwd=str(root), check=True)
             except subprocess.CalledProcessError as exc:
-                # [변경사유]: 분류 실패는 수집 파이프라인을 막지 않음 (fail-open)
-                if cmd[1] == "poster-classify":
+                # [변경사유]: upload OFF 일 때만 classify fail-open. upload ON 이면 fail-closed
+                if cmd[1] == "poster-classify" and not run_upload:
                     log.error("poster-classify failed code=%s — continue", exc.returncode)
                     continue
                 log.error("kakao-import failed cmd=%s code=%s", cmd, exc.returncode)
                 raise
         except subprocess.CalledProcessError as exc:
-            if cmd[1] == "poster-classify":
+            if cmd[1] == "poster-classify" and not run_upload:
                 log.error("poster-classify failed code=%s — continue", exc.returncode)
                 continue
             log.error("kakao-import failed cmd=%s code=%s", cmd, exc.returncode)
