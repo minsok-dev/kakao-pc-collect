@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import subprocess
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from kakao_pc_collect.config import RoomSpec, Settings, effective_drawer_menu_downs
@@ -288,6 +288,9 @@ def run_collect(
     run_upload: bool | None = None,
 ) -> list[dict]:
     """허용 방 순회 수집."""
+    from kakao_pc_collect.admin_notify import send_admin_summary
+    from kakao_pc_collect.run_report import build_run_report, write_run_report
+
     settings.raw_root.mkdir(parents=True, exist_ok=True)
     settings.download_dir.mkdir(parents=True, exist_ok=True)
 
@@ -297,6 +300,8 @@ def run_collect(
         rooms = [r for r in rooms if r.id in want]
     if not rooms:
         raise RuntimeError("enabled room 없음 — config/rooms.yaml 확인")
+
+    started_at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
 
     results: list[dict] = []
     for room in rooms:
@@ -324,15 +329,58 @@ def run_collect(
 
     do_import = settings.run_import if run_import is None else run_import
     do_upload = settings.run_upload if run_upload is None else run_upload
+    import_error: str | None = None
     if do_import and not dry_run:
         # [변경사유]: import 체인 완료 직후(시각 추정 없이) opt-in 시 upload --no-dry-run
         # [변경사유]: CLI --room 이 있으면 import/upload 에도 동일 방 집합 전달 (E2E)
-        _call_kakao_import(
-            settings,
-            run_upload=do_upload,
-            room_ids=list(room_ids) if room_ids else None,
-        )
+        try:
+            _call_kakao_import(
+                settings,
+                run_upload=do_upload,
+                room_ids=list(room_ids) if room_ids else None,
+            )
+        except Exception as exc:  # noqa: BLE001 — 리포트·알림 후 재raise
+            import_error = str(exc)
+            log.error("kakao-import chain failed err=%s", import_error)
 
+    # [변경사유]: I5 — 실행 리포트 + (opt-in) 관리자 카톡 요약
+    if not dry_run:
+        report = build_run_report(
+            collect_results=results,
+            import_root=settings.kakao_import_root,
+            room_ids=list(room_ids) if room_ids else [r.id for r in rooms],
+            run_upload=bool(do_upload and do_import),
+            import_error=import_error,
+            started_at=started_at,
+        )
+        report_path = settings.data_dir / "run-report.json"
+        write_run_report(report_path, report)
+        # import data 에도 복사 — 운영이 import 폴더만 볼 때
+        try:
+            write_run_report(
+                settings.kakao_import_root / "data" / "run-report.json", report
+            )
+        except OSError as exc:
+            log.warning("run-report copy to import-root fail err=%s", exc)
+
+        notify_search = (settings.admin_notify_search or "").strip()
+        if notify_search:
+            notify_out = send_admin_summary(
+                search=notify_search,
+                text=str(report.get("admin_summary_ko") or ""),
+                coords=settings.coords,
+                dry_run=False,
+            )
+            report["admin_notify"] = notify_out
+            write_run_report(report_path, report)
+            log.info(
+                "admin-notify done ok=%s err=%s",
+                notify_out.get("ok"),
+                notify_out.get("error"),
+            )
+
+    if import_error:
+        raise RuntimeError(import_error)
     return results
 
 

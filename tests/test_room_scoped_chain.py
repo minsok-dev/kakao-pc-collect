@@ -85,3 +85,23 @@ def test_classify_fail_open_without_upload(monkeypatch, tmp_path: Path) -> None:
     col_pipe._call_kakao_import(_settings(tmp_path), run_upload=False, room_ids=["r1"])
     assert "similar-detect" in calls
     assert "upload" not in calls
+
+
+def test_similar_fail_blocks_upload(monkeypatch, tmp_path: Path) -> None:
+    """[변경사유]: S3 — similar-detect 실패 시 upload 미호출 (check=True 계약 고정)."""
+    calls: list[str] = []
+
+    def fake_run(cmd, cwd=None, check=False):  # noqa: ANN001
+        calls.append(cmd[1])
+        if cmd[1] == "similar-detect":
+            raise col_pipe.subprocess.CalledProcessError(1, cmd)
+        return MagicMock(returncode=0)
+
+    monkeypatch.setattr(col_pipe.subprocess, "run", fake_run)
+    (tmp_path / "import").mkdir()
+    with pytest.raises(col_pipe.subprocess.CalledProcessError):
+        col_pipe._call_kakao_import(
+            _settings(tmp_path), run_upload=True, room_ids=["r1"]
+        )
+    assert "similar-detect" in calls
+    assert "upload" not in calls

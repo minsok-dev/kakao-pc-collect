@@ -6,6 +6,11 @@
 # 메인 목록 창(제목 정확히 '카카오톡') — 검색 전 이 크기로 맞춤
 # 2026-08-18 calibrate client_size=[441, 1032]
 main_client_size: [441, 1032]
+# [변경사유]: 왼쪽 레일 탭 — 방 수집=채팅, 관리자 알림=친구. 탭이 다르면 검색 결과가 달라짐.
+# F:/TEST_web(로컬) 2026-08-24 calibrate: friends=[33,56] chats=[30,118]
+# D:/site_kdance(다른 PC) 실측: friends=[31,59] chats=[33,119] — 그 PC의 coords.yaml 에 맞게 교체
+friends_tab: [33, 56]
+chats_tab: [30, 118]
 # 검색 입력줄 중앙 [213, 106] / 첫 검색결과 행 중앙 [215, 168]
 main_search: [213, 106]
 first_search_result: [215, 168]
@@ -15,6 +20,9 @@ search_icon: [329, 56]
 
 # 방 창 — 클릭 전 이 크기로 맞춤 (방마다 기억된 크기 무시)
 room_client_size: [424, 1032]
+
+# [변경사유]: I5 — 관리자 알림용 메시지 입력칸 (생략 시 창 하단 중앙 추정)
+# message_input: [212, 980]
 
 # 1) 방 창 — ☰ (채팅방 메뉴)  client_offset=[402, 60]
 hamburger: [402, 60]

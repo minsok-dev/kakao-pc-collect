@@ -59,10 +59,15 @@ class CoordConfig:
     download: tuple[int, int] = (1050, 60)
     # [변경사유]: 메인 목록 창 — 검색칸·첫 결과. 헤더 우측(친구 추가)을 피한다.
     main_client_size: tuple[int, int] = (441, 1032)
+    # [변경사유]: 왼쪽 레일 — 방 수집=채팅 탭, 관리자 알림=친구 탭 (F: 로컬 2026-08-24 실측)
+    friends_tab: tuple[int, int] = (33, 56)
+    chats_tab: tuple[int, int] = (30, 118)
     main_search: tuple[int, int] = (213, 106)
     first_search_result: tuple[int, int] = (215, 168)
     # [변경사유]: 검색창 닫힘(Edit=0)일 때만 돋보기 1회. 열려 있으면 누르지 않음(토글).
     search_icon: tuple[int, int] = (329, 56)
+    # [변경사유]: I5 — 관리자 알림 메시지 입력칸 (없으면 창 하단 중앙 추정)
+    message_input: tuple[int, int] | None = None
     select_count: int = 50
     preload_arrow_presses: int = 80
     arrow_mode: str = "right_then_down"
@@ -82,6 +87,8 @@ class Settings:
     run_import: bool = True
     # [변경사유]: 수집·import 체인 완료 직후 upload --no-dry-run (시각 분리 스케줄 대신 순차 호출)
     run_upload: bool = False
+    # [변경사유]: I5 — 관리자 카톡 알림 검색어 (비어 있으면 전송 안 함)
+    admin_notify_search: str = ""
     log_level: str = "INFO"
     data_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "data")
     watermark_path: Path = field(
@@ -119,9 +126,15 @@ def load_coords(path: Path) -> CoordConfig:
         first_photo=_xy(raw.get("first_photo"), (320, 220)),
         download=_xy(raw.get("download"), (1050, 60)),
         main_client_size=_xy(raw.get("main_client_size"), (441, 1032)),
+        # [변경사유]: 탭 좌표 로드 — 없으면 로컬 실측 기본값
+        friends_tab=_xy(raw.get("friends_tab"), (33, 56)),
+        chats_tab=_xy(raw.get("chats_tab"), (30, 118)),
         main_search=_xy(raw.get("main_search"), (213, 106)),
         first_search_result=_xy(raw.get("first_search_result"), (215, 168)),
         search_icon=_xy(raw.get("search_icon"), (329, 56)),
+        message_input=_xy(raw["message_input"], (0, 0))
+        if raw.get("message_input") is not None
+        else None,
         select_count=int(raw.get("select_count") or 50),
         preload_arrow_presses=int(raw.get("preload_arrow_presses") or 80),
         arrow_mode=str(raw.get("arrow_mode") or "right_then_down"),
@@ -183,6 +196,8 @@ def load_settings(
         "True",
         "yes",
     )
+    # [변경사유]: I5 — 예: KAKAO_ADMIN_NOTIFY_SEARCH=관리자닉네임 또는 1:1 방 검색어
+    admin_notify_search = (os.getenv("KAKAO_ADMIN_NOTIFY_SEARCH") or "").strip()
     data_dir = root / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -201,6 +216,7 @@ def load_settings(
         coords=coords,
         run_import=run_import,
         run_upload=run_upload,
+        admin_notify_search=admin_notify_search,
         log_level=os.getenv("LOG_LEVEL") or "INFO",
         data_dir=data_dir,
         watermark_path=data_dir / "watermarks.json",

@@ -391,6 +391,39 @@ def ensure_search_bar_open(win, hwnd: int, coords) -> None:
     )
 
 
+def ensure_side_tab(hwnd: int, coords, tab: str) -> None:
+    """
+    메인 창 왼쪽 레일 탭 전환.
+    [변경사유]: 방 수집=채팅 탭, 관리자 알림=친구 탭. 탭이 다르면 검색 결과가 달라지고
+    친구 탭에 남으면 이후 방 수집이 실패한다.
+    tab: "chats" | "friends"
+    """
+    from kakao_pc_collect.win_click import click_client
+
+    key = (tab or "chats").strip().lower()
+    if key not in ("chats", "friends"):
+        raise ValueError(f"side_tab must be chats|friends, got {tab!r}")
+    xy = coords.chats_tab if key == "chats" else coords.friends_tab
+    label = "chats_tab" if key == "chats" else "friends_tab"
+    log.info("ensure_side_tab tab=%s client=%s", key, xy)
+    click_client(hwnd, xy, dry_run=False, label=label)
+    time.sleep(0.35)
+
+
+def ensure_chats_tab_on_main(coords) -> None:
+    """
+    메인 목록을 찾아 채팅 탭으로 복귀.
+    [변경사유]: 관리자 알림(친구 탭) 이후 다음 방 수집을 위해 필수.
+    """
+    try:
+        main = find_kakao_window()
+        hwnd = hwnd_of(main)
+        focus_window(main)
+        ensure_side_tab(hwnd, coords, "chats")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("ensure_chats_tab_on_main fail err=%s", exc)
+
+
 def replace_search_text_via_tab(hwnd: int, search: str) -> bool:
     """
     검색칸 클릭 → Tab → Shift+Tab(전체 선택) → 붙여넣기.
@@ -461,16 +494,24 @@ def _dismiss_friend_add(*, kakao_hwnd: int | None = None) -> bool:
     return True
 
 
-def open_room_by_search(search: str, *, coords=None, dry_run: bool = False):
+def open_room_by_search(
+    search: str,
+    *,
+    coords=None,
+    dry_run: bool = False,
+    side_tab: str = "chats",
+):
     """
     이미 열린 방 창이 있으면 그걸 사용.
-    없으면 메인 목록에서 검색창 확인 → 입력칸 클릭 → Tab/Shift+Tab → 붙여넣기 → 첫 결과.
+    없으면 메인 목록에서 (side_tab) 탭 → 검색창 확인 → 입력칸 클릭 → Tab/Shift+Tab → 붙여넣기 → 첫 결과.
     Ctrl+A 금지(친구 추가). 돋보기는 검색창 닫힘일 때만 1회.
+    [변경사유]: side_tab=chats(방 수집) / friends(관리자 1:1). 기본 chats.
     """
     from kakao_pc_collect.config import CoordConfig
     from kakao_pc_collect.win_click import click_client, set_client_size
 
     cfg = coords if coords is not None else CoordConfig()
+    tab = (side_tab or "chats").strip().lower() or "chats"
 
     existing = find_room_window(search, timeout=1.5)
     if existing is not None:
@@ -484,10 +525,14 @@ def open_room_by_search(search: str, *, coords=None, dry_run: bool = False):
     # [변경사유]: 메인 목록도 기억된 크기가 있음 — 검색 좌표 전에 맞춤
     set_client_size(hwnd, cfg.main_client_size[0], cfg.main_client_size[1])
     _dismiss_friend_add(kakao_hwnd=hwnd)
+    # [변경사유]: 검색 전 탭 고정 — 친구 탭에 있으면 방 검색이 안 됨
+    ensure_side_tab(hwnd, cfg, tab)
     log.info(
-        "open_room search=%r dry_run=%s hwnd=%s main_search=%s first_result=%s search_icon=%s",
+        "open_room search=%r dry_run=%s side_tab=%s hwnd=%s main_search=%s "
+        "first_result=%s search_icon=%s",
         search,
         dry_run,
+        tab,
         hwnd,
         cfg.main_search,
         cfg.first_search_result,
