@@ -11,9 +11,13 @@ main_client_size: [441, 1032]
 # D:/site_kdance(다른 PC) 실측: friends=[31,59] chats=[33,119] — 그 PC의 coords.yaml 에 맞게 교체
 friends_tab: [33, 56]
 chats_tab: [30, 118]
-# 검색 입력줄 중앙 [213, 106] / 첫 검색결과 행 중앙 [215, 168]
+# 검색 입력줄 중앙 [213, 106] / 채팅 탭 첫 검색결과 행 중앙 [215, 168]
 main_search: [213, 106]
 first_search_result: [215, 168]
+# [변경사유]: 친구 탭 검색 후 「친구 N」 아래 첫 친구 행 중앙 — 채팅 first_search_result 와 Y가 다름
+# F: 2026-08-24 calibrate client_offset=[229, 191] (친구 검색 첫 결과)
+# D: 서버도 같은 UI면 동일 값으로 시작 후 어긋나면 재측정
+friends_first_search_result: [229, 191]
 # [변경사유]: 헤더 돋보기 — 검색창 닫힘(Edit=0)일 때만 1회. 열려 있으면 금지(토글).
 # 2026-08-18 실측 client_offset 두 번: [328, 55], [329, 57] → 중간값
 search_icon: [329, 56]

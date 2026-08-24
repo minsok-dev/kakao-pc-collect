@@ -77,6 +77,49 @@ def cmd_run(
     click.echo(json.dumps(results, ensure_ascii=False, indent=2))
 
 
+@main.command("notify-test")
+@click.option(
+    "--text",
+    default="[테스트] kakao-pc-collect notify-test",
+    show_default=True,
+    help="전송할 본문",
+)
+@click.option(
+    "--search",
+    default=None,
+    help="검색 닉네임. 생략 시 KAKAO_ADMIN_NOTIFY_SEARCH",
+)
+@click.option("--dry-run", is_flag=True, help="실제 클릭·전송 없이 설정만 확인")
+@click.pass_context
+def cmd_notify_test(
+    ctx: click.Context,
+    text: str,
+    search: str | None,
+    dry_run: bool,
+) -> None:
+    """
+    관리자 알림만 단독 테스트 (수집/upload 없음).
+    친구 탭 검색 → 제목 검증 → 전송 → 채팅 탭 복귀.
+    """
+    from kakao_pc_collect.admin_notify import send_admin_summary
+
+    settings = ctx.obj["settings"]
+    q = (search or settings.admin_notify_search or "").strip()
+    if not q:
+        raise click.UsageError(
+            "--search 또는 .env 의 KAKAO_ADMIN_NOTIFY_SEARCH 가 필요합니다"
+        )
+    out = send_admin_summary(
+        search=q,
+        text=text,
+        coords=settings.coords,
+        dry_run=dry_run,
+    )
+    click.echo(json.dumps(out, ensure_ascii=False, indent=2))
+    if not out.get("ok"):
+        raise click.ClickException(str(out.get("error") or "notify-test failed"))
+
+
 @main.command("calibrate")
 @click.option(
     "--title",
@@ -92,7 +135,7 @@ def cmd_calibrate(title: str | None, watch: bool) -> None:
     """
     현재 커서의 창 클라이언트 상대 좌표를 출력.
     coords.yaml 의 hamburger / first_photo / download / search_icon /
-    friends_tab / chats_tab 에 기입.
+    friends_tab / chats_tab / friends_first_search_result 에 기입.
     """
     def _once() -> tuple[int, int]:
         hwnd = None

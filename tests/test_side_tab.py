@@ -23,13 +23,21 @@ def test_load_coords_friends_chats_tabs(tmp_path: Path) -> None:
     assert cfg.chats_tab == (33, 119)
 
 
-def test_load_coords_default_tabs_when_missing(tmp_path: Path) -> None:
+def test_load_coords_friends_first_search_result(tmp_path: Path) -> None:
     p = tmp_path / "coords.yaml"
-    p.write_text("main_search: [213, 106]\n", encoding="utf-8")
+    p.write_text(
+        "friends_first_search_result: [215, 220]\n",
+        encoding="utf-8",
+    )
     cfg = load_coords(p)
-    # [변경사유]: F: 로컬 실측 기본값
-    assert cfg.friends_tab == (33, 56)
-    assert cfg.chats_tab == (30, 118)
+    assert cfg.friends_first_search_result == (215, 220)
+
+
+def test_load_coords_friends_first_optional(tmp_path: Path) -> None:
+    p = tmp_path / "coords.yaml"
+    p.write_text("first_search_result: [215, 168]\n", encoding="utf-8")
+    cfg = load_coords(p)
+    assert cfg.friends_first_search_result is None
 
 
 def test_ensure_side_tab_clicks_friends() -> None:

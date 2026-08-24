@@ -64,6 +64,9 @@ class CoordConfig:
     chats_tab: tuple[int, int] = (30, 118)
     main_search: tuple[int, int] = (213, 106)
     first_search_result: tuple[int, int] = (215, 168)
+    # [변경사유]: 친구 탭 검색 결과 첫 행 — 「친구 N」 헤더 아래. 채팅 first_search_result 와 Y 다름
+    # None 이면 first_search_result 로 폴백(경고 로그). 운영 PC는 반드시 실측 기입.
+    friends_first_search_result: tuple[int, int] | None = None
     # [변경사유]: 검색창 닫힘(Edit=0)일 때만 돋보기 1회. 열려 있으면 누르지 않음(토글).
     search_icon: tuple[int, int] = (329, 56)
     # [변경사유]: I5 — 관리자 알림 메시지 입력칸 (없으면 창 하단 중앙 추정)
@@ -131,6 +134,10 @@ def load_coords(path: Path) -> CoordConfig:
         chats_tab=_xy(raw.get("chats_tab"), (30, 118)),
         main_search=_xy(raw.get("main_search"), (213, 106)),
         first_search_result=_xy(raw.get("first_search_result"), (215, 168)),
+        # [변경사유]: 친구 탭 첫 결과 — 키 없으면 None → open 시 채팅용으로 폴백+경고
+        friends_first_search_result=_xy(raw["friends_first_search_result"], (0, 0))
+        if raw.get("friends_first_search_result") is not None
+        else None,
         search_icon=_xy(raw.get("search_icon"), (329, 56)),
         message_input=_xy(raw["message_input"], (0, 0))
         if raw.get("message_input") is not None

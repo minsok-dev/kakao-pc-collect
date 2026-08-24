@@ -512,6 +512,20 @@ def open_room_by_search(
 
     cfg = coords if coords is not None else CoordConfig()
     tab = (side_tab or "chats").strip().lower() or "chats"
+    # [변경사유]: 친구 탭은 「친구 N」 헤더 아래 첫 행 — 채팅 first_search_result 와 분리
+    if tab == "friends":
+        first_xy = cfg.friends_first_search_result
+        if first_xy is None:
+            first_xy = cfg.first_search_result
+            log.warning(
+                "friends_first_search_result missing — fallback first_search_result=%s "
+                "(본인/잘못된 행 클릭 위험). coords.yaml 에 실측값을 넣으세요.",
+                first_xy,
+            )
+        first_label = "friends_first_search_result"
+    else:
+        first_xy = cfg.first_search_result
+        first_label = "first_search_result"
 
     existing = find_room_window(search, timeout=1.5)
     if existing is not None:
@@ -529,13 +543,14 @@ def open_room_by_search(
     ensure_side_tab(hwnd, cfg, tab)
     log.info(
         "open_room search=%r dry_run=%s side_tab=%s hwnd=%s main_search=%s "
-        "first_result=%s search_icon=%s",
+        "first_result=%s label=%s search_icon=%s",
         search,
         dry_run,
         tab,
         hwnd,
         cfg.main_search,
-        cfg.first_search_result,
+        first_xy,
+        first_label,
         cfg.search_icon,
     )
     if dry_run:
@@ -544,7 +559,7 @@ def open_room_by_search(
     # [변경사유]: Edit=0 이면 닫힘 — 돋보기 1회. 열려 있으면 누르지 않음.
     ensure_search_bar_open(main, hwnd, cfg)
 
-    # 1) 검색칸 클릭 — Ctrl+A·X 금지
+    # 1) 검색칸 클릭 — Ctrl+A·X 금지 (채팅/친구 동일 위치)
     click_client(hwnd, cfg.main_search, dry_run=False, label="main_search")
     time.sleep(0.35)
     if _dismiss_friend_add(kakao_hwnd=hwnd):
@@ -558,17 +573,16 @@ def open_room_by_search(
             "검색어를 카카오톡 창에 붙여넣지 못함 — 전경이 카톡이 아님. "
             "터미널에서 직접 실행하고, 실행 중 다른 창을 클릭하지 마세요."
         )
-    time.sleep(0.5)
+    # [변경사유]: 친구 탭은 필터 결과(「친구 N」)가 뜰 때까지 채팅보다 조금 더 대기
+    time.sleep(1.0 if tab == "friends" else 0.5)
     if _dismiss_friend_add(kakao_hwnd=hwnd):
         raise RuntimeError(
             "검색 입력 중 「친구 추가」가 열림 — 검색칸 좌표가 헤더 아이콘과 겹칩니다. "
             "calibrate --title 카카오톡 으로 main_search 를 검색 입력줄 한가운데로 다시 재세요."
         )
 
-    # 2) 첫 검색결과 행
-    click_client(
-        hwnd, cfg.first_search_result, dry_run=False, label="first_search_result"
-    )
+    # 2) 첫 검색결과 행 (탭별 좌표)
+    click_client(hwnd, first_xy, dry_run=False, label=first_label)
     time.sleep(1.2)
 
     room_win = find_room_window(search, timeout=8.0)
