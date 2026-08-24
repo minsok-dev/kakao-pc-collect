@@ -378,6 +378,12 @@ def run_collect(
                 notify_out.get("ok"),
                 notify_out.get("error"),
             )
+        else:
+            # [변경사유]: 빈 값이면 전송 안 함 — 예전엔 로그 없이 스킵되어 .env 미적용과 구분 불가
+            log.info(
+                "admin-notify skipped — KAKAO_ADMIN_NOTIFY_SEARCH empty "
+                "(set in kakao-pc-collect/.env under PROJECT_ROOT)"
+            )
 
     if import_error:
         raise RuntimeError(import_error)

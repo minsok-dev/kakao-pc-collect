@@ -173,7 +173,17 @@ def load_settings(
     coords_path: Path | None = None,
 ) -> Settings:
     root = PROJECT_ROOT
-    load_dotenv(env_path or (root / ".env"), override=False)
+    env_file = env_path or (root / ".env")
+    # [변경사유]: PROJECT_ROOT 기준 .env (cwd 아님). 없으면 경고 — 잘못된 경로/옛 설치 조기 발견
+    loaded = load_dotenv(env_file, override=False)
+    if not loaded and not env_file.is_file():
+        from kakao_pc_collect.logging_util import get_logger
+
+        get_logger(__name__).warning(
+            "dotenv missing path=%s PROJECT_ROOT=%s — KAKAO_ADMIN_NOTIFY_SEARCH 등 미적용",
+            env_file,
+            root,
+        )
 
     import_root = Path(
         os.getenv("KAKAO_IMPORT_ROOT")
@@ -196,13 +206,23 @@ def load_settings(
         "True",
         "yes",
     )
-    # [변경사유]: I5 — 예: KAKAO_ADMIN_NOTIFY_SEARCH=관리자닉네임 또는 1:1 방 검색어
+    # [변경사유]: I5 — 예: KAKAO_ADMIN_NOTIFY_SEARCH=관리자닉네임 (친구 탭 검색)
     admin_notify_search = (os.getenv("KAKAO_ADMIN_NOTIFY_SEARCH") or "").strip()
     data_dir = root / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
 
     rooms = load_rooms(rooms_path or (root / "config" / "rooms.yaml"))
     coords = load_coords(coords_path or (root / "config" / "coords.yaml"))
+
+    # [변경사유]: 알림 opt-in 로드 여부 — 비어 있으면 전송 스킵이므로 시작 시 로그로 확인
+    from kakao_pc_collect.logging_util import get_logger
+
+    get_logger(__name__).info(
+        "settings loaded PROJECT_ROOT=%s env=%s admin_notify_search=%r",
+        root,
+        env_file,
+        admin_notify_search or "(empty→skip)",
+    )
 
     raw_root = import_root / "input" / "raw"
     return Settings(
