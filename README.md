@@ -14,10 +14,10 @@ kakao-import-local/input/raw/<room_id>/photos/KakaoTalk_*
 
 ## 하는 일
 
-1. 허용 방 검색 → Enter → **Ctrl+S** 로 대화 txt → `<room_id>/chats/`
-2. ☰ · 서랍 첫 사진 · 다운로드 **창 클라이언트 상대 좌표 3곳**으로 사진 배치
-3. Documents `카카오톡 받은 파일` → 신규 `KakaoTalk_*.png/jpg`만 이름 유지 복사 → `<room_id>/photos/`
-4. 방별 워터마크 스템으로 배치 중단
+1. 허용 방 검색 → Enter → ☰ · 서랍 첫 사진 · 다운로드 **창 클라이언트 상대 좌표**로 사진 배치
+2. Documents `카카오톡 받은 파일` → 신규 `KakaoTalk_*.png/jpg`만 이름 유지 복사 → `<room_id>/photos/`
+3. 방별 워터마크 스템으로 배치 중단
+4. **Ctrl+S** 로 대화 txt → `<room_id>/chats/` (사진 수집 **이후** — 다운로드 중 생긴 캡션 포함)
 5. 성공 시 `kakao-import run` + `poster-classify --no-review` + `similar-detect` 호출.
    `KAKAO_COLLECT_RUN_UPLOAD=1` 또는 `--with-upload` 일 때만 이어서 `upload --no-dry-run` (기본은 upload 안 함).
    (자동 체인에서는 poster-review UI를 띄우지 않음. 수동 리뷰는 `kakao-import poster-review`)

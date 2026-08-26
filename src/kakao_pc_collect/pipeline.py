@@ -1,4 +1,5 @@
-# [변경사유]: 방 루프 — txt 내보내기 + 서랍 50칸 배치 + 워터마크 중단 + import 호출
+# [변경사유]: 방 루프 — 사진 서랍 먼저 → 대화 txt → 워터마크·import 호출
+# [변경사유]: txt→사진 순서였을 때 다운로드 중 신규 이미지에 캡션 매칭 실패 → 사진 후 txt로 변경
 """수집 파이프라인."""
 
 from __future__ import annotations
@@ -141,7 +142,7 @@ def collect_room(
     dry_run: bool = False,
     max_photo_batches: int = 40,
 ) -> dict:
-    """한 방 수집. 반환 요약 dict."""
+    """한 방 수집 (사진 → 대화 txt). 반환 요약 dict."""
     summary: dict = {
         "room_id": room.id,
         "search": room.search,
@@ -174,105 +175,107 @@ def collect_room(
         room.search, coords=settings.coords, dry_run=dry_run
     )
 
-    if chats:
-        export_chat_txt(win, chats_dir, dry_run=dry_run)
-        summary["chat_exported"] = True
-
-    if not photos:
-        return summary
-
+    # [변경사유]: 사진 먼저 → 대화 txt 나중.
+    # 예전(txt→사진)은 서랍 다운로드 중 새 이미지가 들어오면 대화 파일에 캡션이 없어 매칭 실패함.
     coords = settings.coords
     room_hwnd = hwnd_of(win)
     total_copied = 0
     best_stem = watermark
 
-    for batch_i in range(max_photo_batches):
-        photos_before = _existing_photo_names(photos_dir)
-        skip = batch_i * coords.select_count
+    if photos:
+        for batch_i in range(max_photo_batches):
+            photos_before = _existing_photo_names(photos_dir)
+            skip = batch_i * coords.select_count
 
-        log.info("photo batch=%s skip_tiles=%s", batch_i + 1, skip)
+            log.info("photo batch=%s skip_tiles=%s", batch_i + 1, skip)
 
-        # [변경사유]: 방 타입별 drawer_menu_downs — 오픈 단톡방×2, 일반 단톡방×3
-        dmd = effective_drawer_menu_downs(room, coords.drawer_menu_downs)
-        drawer_hwnd = open_drawer(
-            room_hwnd, coords, dry_run=dry_run, drawer_menu_downs_override=dmd
-        )
-        select_photo_batch(
-            drawer_hwnd,
-            coords,
-            skip_tiles=skip,
-            dry_run=dry_run,
-        )
-        # [변경사유]: 선택 직후 스냅샷 — 같은 파일명 덮어쓰기는 mtime으로 감지
-        before_dl = snapshot_names(settings.download_dir)
-        before_mtime = snapshot_mtimes(settings.download_dir)
-        click_download(drawer_hwnd, coords, dry_run=dry_run)
+            # [변경사유]: 방 타입별 drawer_menu_downs — 오픈 단톡방×2, 일반 단톡방×3
+            dmd = effective_drawer_menu_downs(room, coords.drawer_menu_downs)
+            drawer_hwnd = open_drawer(
+                room_hwnd, coords, dry_run=dry_run, drawer_menu_downs_override=dmd
+            )
+            select_photo_batch(
+                drawer_hwnd,
+                coords,
+                skip_tiles=skip,
+                dry_run=dry_run,
+            )
+            # [변경사유]: 선택 직후 스냅샷 — 같은 파일명 덮어쓰기는 mtime으로 감지
+            before_dl = snapshot_names(settings.download_dir)
+            before_mtime = snapshot_mtimes(settings.download_dir)
+            click_download(drawer_hwnd, coords, dry_run=dry_run)
 
-        if dry_run:
+            if dry_run:
+                summary["photo_batches"] = batch_i + 1
+                summary["stop_reason"] = "dry_run"
+                break
+
+            new_names = wait_for_new_files(
+                settings.download_dir,
+                before=before_dl,
+                before_mtime=before_mtime,
+            )
+            to_copy = new_names
+            # [변경사유]: 첫 수집 3일 컷 + 이후에는 이미 가진 가장 오래된 스템보다 과거는 복사하지 않음
+            copy_floor = first_run_cutoff
+            if copy_floor is None and photos_before:
+                copy_floor = min_stem_among(list(photos_before))
+            if copy_floor:
+                to_copy = _names_on_or_after(new_names, copy_floor)
+                skipped_old = len(new_names) - len(to_copy)
+                if skipped_old:
+                    log.info(
+                        "skip_old count=%s floor=%s",
+                        skipped_old,
+                        copy_floor,
+                    )
+            copied = copy_new_images(
+                download_dir=settings.download_dir,
+                photos_dir=photos_dir,
+                names=to_copy,
+            )
+            total_copied += len(copied)
             summary["photo_batches"] = batch_i + 1
-            summary["stop_reason"] = "dry_run"
-            break
 
-        new_names = wait_for_new_files(
-            settings.download_dir,
-            before=before_dl,
-            before_mtime=before_mtime,
-        )
-        to_copy = new_names
-        # [변경사유]: 첫 수집 3일 컷 + 이후에는 이미 가진 가장 오래된 스템보다 과거는 복사하지 않음
-        copy_floor = first_run_cutoff
-        if copy_floor is None and photos_before:
-            copy_floor = min_stem_among(list(photos_before))
-        if copy_floor:
-            to_copy = _names_on_or_after(new_names, copy_floor)
-            skipped_old = len(new_names) - len(to_copy)
-            if skipped_old:
-                log.info(
-                    "skip_old count=%s floor=%s",
-                    skipped_old,
-                    copy_floor,
-                )
-        copied = copy_new_images(
-            download_dir=settings.download_dir,
-            photos_dir=photos_dir,
-            names=to_copy,
-        )
-        total_copied += len(copied)
-        summary["photo_batches"] = batch_i + 1
+            batch_for_judge = new_names or copied
+            stop, reason = _should_stop_room(
+                batch_names=batch_for_judge,
+                watermark=watermark,
+                photos_before=photos_before,
+                first_run_cutoff=first_run_cutoff,
+            )
+            # [변경사유]: 첫 수집에서 오래된 파일은 복사하지 않으므로 워터마크는 복사본 기준
+            mx = max_stem_among(copied)
+            if mx and (best_stem is None or mx > best_stem):
+                best_stem = mx
 
-        batch_for_judge = new_names or copied
-        stop, reason = _should_stop_room(
-            batch_names=batch_for_judge,
-            watermark=watermark,
-            photos_before=photos_before,
-            first_run_cutoff=first_run_cutoff,
-        )
-        # [변경사유]: 첫 수집에서 오래된 파일은 복사하지 않으므로 워터마크는 복사본 기준
-        mx = max_stem_among(copied)
-        if mx and (best_stem is None or mx > best_stem):
-            best_stem = mx
+            log.info(
+                "batch judge stop=%s reason=%s copied=%s",
+                stop,
+                reason,
+                len(copied),
+            )
 
-        log.info(
-            "batch judge stop=%s reason=%s copied=%s",
-            stop,
-            reason,
-            len(copied),
-        )
+            _close_drawer()
+            focus_window(win)
 
-        _close_drawer()
+            if stop:
+                summary["stop_reason"] = reason
+                break
+        else:
+            summary["stop_reason"] = "max_batches"
+
+        summary["copied"] = total_copied
+        if best_stem and not dry_run:
+            marks[room.id] = best_stem
+            save_watermarks(settings.watermark_path, marks)
+            log.info("watermark updated room=%s stem=%s", room.id, best_stem)
+
+    # [변경사유]: 사진 수집(서랍) 종료 후 방 창에서 txt — 다운로드 구간 중 생긴 캡션도 포함
+    if chats:
         focus_window(win)
-
-        if stop:
-            summary["stop_reason"] = reason
-            break
-    else:
-        summary["stop_reason"] = "max_batches"
-
-    summary["copied"] = total_copied
-    if best_stem and not dry_run:
-        marks[room.id] = best_stem
-        save_watermarks(settings.watermark_path, marks)
-        log.info("watermark updated room=%s stem=%s", room.id, best_stem)
+        export_chat_txt(win, chats_dir, dry_run=dry_run)
+        summary["chat_exported"] = True
 
     return summary
 
