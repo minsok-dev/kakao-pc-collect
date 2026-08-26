@@ -365,29 +365,61 @@ def search_bar_is_open(win) -> bool:
     return open_
 
 
-def ensure_search_bar_open(win, hwnd: int, coords) -> None:
+def resolve_search_icon_xy(coords, side_tab: str) -> tuple[tuple[int, int], str]:
     """
-    검색창이 닫혀 있으면 돋보기 1회만 클릭 후 Edit 재확인.
+    side_tab 에 맞는 헤더 돋보기 client 좌표.
+    [변경사유]: 채팅(아이콘 3개) vs 친구(아이콘 2개) 로 X 위치가 다름 — 키 분리.
+    friends 인데 friends_search_icon 없으면 search_icon 폴백 + 경고.
+    """
+    tab = (side_tab or "chats").strip().lower() or "chats"
+    if tab == "friends":
+        xy = getattr(coords, "friends_search_icon", None)
+        if xy is None:
+            xy = coords.search_icon
+            log.warning(
+                "friends_search_icon missing — fallback search_icon=%s "
+                "(친구 탭 돋보기가 빗나갈 수 있음). coords.yaml 에 실측값을 넣으세요.",
+                xy,
+            )
+        return (int(xy[0]), int(xy[1])), "friends_search_icon"
+    xy = coords.search_icon
+    return (int(xy[0]), int(xy[1])), "search_icon"
+
+
+def ensure_search_bar_open(
+    win,
+    hwnd: int,
+    coords,
+    *,
+    side_tab: str = "chats",
+) -> None:
+    """
+    검색창이 닫혀 있으면 탭별 돋보기 1회만 클릭 후 Edit 재확인.
     이미 열려 있으면 돋보기를 누르지 않음 (토글이라 닫힘).
+    [변경사유]: side_tab=friends 이면 friends_search_icon 사용.
     """
     from kakao_pc_collect.win_click import click_client
 
     if search_bar_is_open(win):
         return
+    icon_xy, icon_label = resolve_search_icon_xy(coords, side_tab)
     log.info(
-        "search bar closed — click search_icon once client=%s",
-        coords.search_icon,
+        "search bar closed — click %s once client=%s side_tab=%s",
+        icon_label,
+        icon_xy,
+        side_tab,
     )
-    click_client(hwnd, coords.search_icon, dry_run=False, label="search_icon")
+    click_client(hwnd, icon_xy, dry_run=False, label=icon_label)
     deadline = time.time() + 2.5
     while time.time() < deadline:
         time.sleep(0.25)
         if search_bar_is_open(win):
-            log.info("search bar opened after search_icon")
+            log.info("search bar opened after %s", icon_label)
             return
     raise RuntimeError(
-        "검색 입력창이 열리지 않음 — 돋보기 좌표(search_icon)를 재측정하거나 "
-        "실행 전에 검색창을 열어 두세요. 돋보기는 토글이라 두 번 누르면 닫힙니다."
+        f"검색 입력창이 열리지 않음 — 돋보기 좌표({icon_label})를 재측정하거나 "
+        "실행 전에 검색창을 열어 두세요. 돋보기는 토글이라 두 번 누르면 닫힙니다. "
+        "친구 탭은 friends_search_icon, 채팅 탭은 search_icon."
     )
 
 
@@ -541,9 +573,11 @@ def open_room_by_search(
     _dismiss_friend_add(kakao_hwnd=hwnd)
     # [변경사유]: 검색 전 탭 고정 — 친구 탭에 있으면 방 검색이 안 됨
     ensure_side_tab(hwnd, cfg, tab)
+    # [변경사유]: 탭별 돋보기 — 채팅 search_icon / 친구 friends_search_icon
+    icon_xy, icon_label = resolve_search_icon_xy(cfg, tab)
     log.info(
         "open_room search=%r dry_run=%s side_tab=%s hwnd=%s main_search=%s "
-        "first_result=%s label=%s search_icon=%s",
+        "first_result=%s label=%s %s=%s",
         search,
         dry_run,
         tab,
@@ -551,13 +585,14 @@ def open_room_by_search(
         cfg.main_search,
         first_xy,
         first_label,
-        cfg.search_icon,
+        icon_label,
+        icon_xy,
     )
     if dry_run:
         return main
 
-    # [변경사유]: Edit=0 이면 닫힘 — 돋보기 1회. 열려 있으면 누르지 않음.
-    ensure_search_bar_open(main, hwnd, cfg)
+    # [변경사유]: Edit=0 이면 닫힘 — 탭별 돋보기 1회. 열려 있으면 누르지 않음.
+    ensure_search_bar_open(main, hwnd, cfg, side_tab=tab)
 
     # 1) 검색칸 클릭 — Ctrl+A·X 금지 (채팅/친구 동일 위치)
     click_client(hwnd, cfg.main_search, dry_run=False, label="main_search")

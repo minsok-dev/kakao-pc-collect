@@ -40,6 +40,79 @@ def test_load_coords_friends_first_optional(tmp_path: Path) -> None:
     assert cfg.friends_first_search_result is None
 
 
+def test_load_coords_friends_search_icon(tmp_path: Path) -> None:
+    p = tmp_path / "coords.yaml"
+    p.write_text(
+        "search_icon: [329, 56]\nfriends_search_icon: [360, 56]\n",
+        encoding="utf-8",
+    )
+    cfg = load_coords(p)
+    assert cfg.search_icon == (329, 56)
+    assert cfg.friends_search_icon == (360, 56)
+
+
+def test_load_coords_friends_search_icon_optional(tmp_path: Path) -> None:
+    p = tmp_path / "coords.yaml"
+    p.write_text("search_icon: [329, 56]\n", encoding="utf-8")
+    cfg = load_coords(p)
+    assert cfg.friends_search_icon is None
+
+
+def test_resolve_search_icon_friends_uses_dedicated() -> None:
+    from kakao_pc_collect.uia_kakao import resolve_search_icon_xy
+
+    coords = CoordConfig(
+        search_icon=(329, 56),
+        friends_search_icon=(360, 56),
+    )
+    xy, label = resolve_search_icon_xy(coords, "friends")
+    assert xy == (360, 56)
+    assert label == "friends_search_icon"
+
+
+def test_resolve_search_icon_chats_uses_search_icon() -> None:
+    from kakao_pc_collect.uia_kakao import resolve_search_icon_xy
+
+    coords = CoordConfig(
+        search_icon=(329, 56),
+        friends_search_icon=(360, 56),
+    )
+    xy, label = resolve_search_icon_xy(coords, "chats")
+    assert xy == (329, 56)
+    assert label == "search_icon"
+
+
+def test_resolve_search_icon_friends_fallback() -> None:
+    from kakao_pc_collect.uia_kakao import resolve_search_icon_xy
+
+    coords = CoordConfig(search_icon=(329, 56), friends_search_icon=None)
+    xy, label = resolve_search_icon_xy(coords, "friends")
+    assert xy == (329, 56)
+    assert label == "friends_search_icon"
+
+
+def test_ensure_search_bar_open_clicks_friends_icon() -> None:
+    from kakao_pc_collect.uia_kakao import ensure_search_bar_open
+
+    coords = CoordConfig(
+        search_icon=(329, 56),
+        friends_search_icon=(360, 56),
+    )
+    win = MagicMock()
+    with (
+        patch(
+            "kakao_pc_collect.uia_kakao.search_bar_is_open",
+            side_effect=[False, True],
+        ),
+        patch("kakao_pc_collect.win_click.click_client") as click,
+    ):
+        ensure_search_bar_open(win, 1, coords, side_tab="friends")
+    click.assert_called_once()
+    args, kwargs = click.call_args
+    assert args[1] == (360, 56)
+    assert kwargs.get("label") == "friends_search_icon"
+
+
 def test_ensure_side_tab_clicks_friends() -> None:
     coords = CoordConfig(friends_tab=(33, 56), chats_tab=(30, 118))
     with patch("kakao_pc_collect.win_click.click_client") as click:

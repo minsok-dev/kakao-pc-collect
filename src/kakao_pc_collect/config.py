@@ -67,8 +67,11 @@ class CoordConfig:
     # [변경사유]: 친구 탭 검색 결과 첫 행 — 「친구 N」 헤더 아래. 채팅 first_search_result 와 Y 다름
     # None 이면 first_search_result 로 폴백(경고 로그). 운영 PC는 반드시 실측 기입.
     friends_first_search_result: tuple[int, int] | None = None
-    # [변경사유]: 검색창 닫힘(Edit=0)일 때만 돋보기 1회. 열려 있으면 누르지 않음(토글).
+    # [변경사유]: 채팅 탭 헤더 돋보기 — 아이콘 3개(검색·새채팅·오픈) 중 왼쪽
     search_icon: tuple[int, int] = (329, 56)
+    # [변경사유]: 친구 탭 헤더 돋보기 — 아이콘 2개(검색·친구추가)라 X가 채팅과 다름.
+    # None 이면 search_icon 폴백(경고). 관리자 알림은 반드시 친구 탭에서 실측 기입.
+    friends_search_icon: tuple[int, int] | None = None
     # [변경사유]: I5 — 관리자 알림 메시지 입력칸 (없으면 창 하단 중앙 추정)
     message_input: tuple[int, int] | None = None
     select_count: int = 50
@@ -139,6 +142,10 @@ def load_coords(path: Path) -> CoordConfig:
         if raw.get("friends_first_search_result") is not None
         else None,
         search_icon=_xy(raw.get("search_icon"), (329, 56)),
+        # [변경사유]: 친구 탭 돋보기 — 키 없으면 None → open 시 채팅용으로 폴백+경고
+        friends_search_icon=_xy(raw["friends_search_icon"], (0, 0))
+        if raw.get("friends_search_icon") is not None
+        else None,
         message_input=_xy(raw["message_input"], (0, 0))
         if raw.get("message_input") is not None
         else None,

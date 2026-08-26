@@ -135,8 +135,9 @@ def cmd_calibrate(title: str | None, watch: bool) -> None:
     """
     현재 커서의 창 클라이언트 상대 좌표를 출력.
     coords.yaml 의 hamburger / first_photo / download / search_icon /
-    friends_tab / chats_tab / friends_first_search_result 에 기입.
+    friends_search_icon / friends_tab / chats_tab / friends_first_search_result 에 기입.
     """
+    # [변경사유]: 친구 탭 돋보기는 채팅과 X가 다름 — friends_search_icon 별도 실측.
     def _once() -> tuple[int, int]:
         hwnd = None
         if title:

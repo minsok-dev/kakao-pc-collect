@@ -18,9 +18,13 @@ first_search_result: [215, 168]
 # F: 2026-08-24 calibrate client_offset=[229, 191] (친구 검색 첫 결과)
 # D: 서버도 같은 UI면 동일 값으로 시작 후 어긋나면 재측정
 friends_first_search_result: [229, 191]
-# [변경사유]: 헤더 돋보기 — 검색창 닫힘(Edit=0)일 때만 1회. 열려 있으면 금지(토글).
+# [변경사유]: 채팅 탭 헤더 돋보기 — 아이콘 3개 중 왼쪽. 검색창 닫힘일 때만 1회(토글).
 # 2026-08-18 실측 client_offset 두 번: [328, 55], [329, 57] → 중간값
 search_icon: [329, 56]
+# [변경사유]: 친구 탭 헤더 돋보기 — 아이콘 2개(검색·친구추가)라 X가 채팅과 다름.
+# 2026-08-26 F: calibrate 친구 탭 돋보기 cursor=(318,57) @ client_size=392×1032
+# main_client_size=441 에 맞춤 — 우측 여백 74 유지 → x=441-74=367 (실행 전 set_client_size)
+friends_search_icon: [367, 57]
 
 # 방 창 — 클릭 전 이 크기로 맞춤 (방마다 기억된 크기 무시)
 room_client_size: [424, 1032]
