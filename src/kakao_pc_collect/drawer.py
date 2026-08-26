@@ -132,7 +132,8 @@ def open_drawer(
 
 
 def _arrow_sequence(coords: CoordConfig, presses: int) -> list[str]:
-    mode = (coords.arrow_mode or "right_then_down").lower()
+    # [변경사유]: 기본 right — Shift 범위 선택과 맞춤 (지그재그 DOWN/LEFT 는 선택 깨짐)
+    mode = (coords.arrow_mode or "right").lower()
     cols = max(1, coords.grid_columns)
     keys: list[str] = []
     if mode == "right":
@@ -140,7 +141,7 @@ def _arrow_sequence(coords: CoordConfig, presses: int) -> list[str]:
     elif mode == "down":
         keys = ["{DOWN}"] * presses
     else:
-        # [변경사유]: 한 키=한 칸 지그재그. 줄 끝 Down 은 같은 열 다음 줄이라 칸이 건너뛰어짐
+        # right_then_down 등 — 한 키=한 칸 지그재그 (레거시, Shift 선택에 비권장)
         keys = _snake_sequence(presses, cols)
     return keys
 
@@ -187,8 +188,9 @@ def select_photo_batch(
     dry_run: bool = False,
 ) -> None:
     """
-    포커스 → 첫 칸 → Shift 없이 칸 로드 → 첫 칸 → skip → Shift 최대 50장.
+    포커스 → 첫 칸 → Shift 없이 칸 로드 → 첫 칸 → skip → Shift+방향키로 최대 50칸.
     [변경사유]: 방향키로 지나지 않은 칸은 선택이 안 됨. 50 초과 시 다운로드 비활성.
+    [변경사유]: arrow_mode=right 권장 — Shift+RIGHT만(줄 끝은 UI가 다음 줄). 지그재그는 선택 깨짐.
     """
     n = max(1, min(50, coords.select_count))
     skip = max(0, int(skip_tiles))

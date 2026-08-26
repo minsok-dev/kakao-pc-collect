@@ -76,7 +76,8 @@ class CoordConfig:
     message_input: tuple[int, int] | None = None
     select_count: int = 50
     preload_arrow_presses: int = 80
-    arrow_mode: str = "right_then_down"
+    # [변경사유]: 기본 right — Shift+지그재그는 줄 점프로 선택 깨짐. 줄 끝 RIGHT=다음 줄
+    arrow_mode: str = "right"
     grid_columns: int = 6
 
 
@@ -151,7 +152,7 @@ def load_coords(path: Path) -> CoordConfig:
         else None,
         select_count=int(raw.get("select_count") or 50),
         preload_arrow_presses=int(raw.get("preload_arrow_presses") or 80),
-        arrow_mode=str(raw.get("arrow_mode") or "right_then_down"),
+        arrow_mode=str(raw.get("arrow_mode") or "right"),
         grid_columns=int(raw.get("grid_columns") or 6),
     )
 

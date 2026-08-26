@@ -56,6 +56,8 @@ download: [1108, 810]
 # 선택·프리로드 (preload: Shift 없이 지나서 칸 로드. 50 초과 선택 금지)
 select_count: 50
 preload_arrow_presses: 80
+# [변경사유]: right_then_down(지그재그)는 Shift 범위 선택이 줄 점프·취소로 깨짐.
+# 카톡 서랍은 줄 끝 RIGHT 가 다음 줄 첫 칸으로 넘어가므로 RIGHT만 사용.
 # right | down | right_then_down
-arrow_mode: right_then_down
+arrow_mode: right
 grid_columns: 6

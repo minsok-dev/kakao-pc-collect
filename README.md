@@ -15,6 +15,7 @@ kakao-import-local/input/raw/<room_id>/photos/KakaoTalk_*
 ## 하는 일
 
 1. 허용 방 검색 → Enter → ☰ · 서랍 첫 사진 · 다운로드 **창 클라이언트 상대 좌표**로 사진 배치
+   (서랍 선택은 `arrow_mode: right` — Shift+RIGHT만. 줄 끝은 카톡이 다음 줄로 넘김)
 2. Documents `카카오톡 받은 파일` → 신규 `KakaoTalk_*.png/jpg`만 이름 유지 복사 → `<room_id>/photos/`
 3. 방별 워터마크 스템으로 배치 중단
 4. **Ctrl+S** 로 대화 txt → `<room_id>/chats/` (사진 수집 **이후** — 다운로드 중 생긴 캡션 포함)
