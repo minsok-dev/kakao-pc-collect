@@ -186,13 +186,17 @@ def select_photo_batch(
     *,
     skip_tiles: int = 0,
     dry_run: bool = False,
+    select_count: int | None = None,
 ) -> None:
     """
     포커스 → 첫 칸 → Shift 없이 칸 로드 → 첫 칸 → skip → Shift+방향키로 최대 50칸.
     [변경사유]: 방향키로 지나지 않은 칸은 선택이 안 됨. 50 초과 시 다운로드 비활성.
     [변경사유]: arrow_mode=right 권장 — Shift+RIGHT만(줄 끝은 UI가 다음 줄). 지그재그는 선택 깨짐.
+    [변경사유]: select_count 인자 — 방별 10~50 (None이면 coords 전역).
     """
-    n = max(1, min(50, coords.select_count))
+    # [변경사유]: 방별 배치 크기 우선, 없으면 coords.select_count (상한 50 유지)
+    raw_n = select_count if select_count is not None else coords.select_count
+    n = max(1, min(50, int(raw_n)))
     skip = max(0, int(skip_tiles))
     preload = max(n + skip, coords.preload_arrow_presses)
 
@@ -303,11 +307,13 @@ def download_one_batch(
     skip_tiles: int = 0,
     dry_run: bool = False,
     drawer_menu_downs_override: int | None = None,
+    select_count: int | None = None,
 ) -> list[str]:
     """
-    서랍 열고 50칸 선택·다운로드·photos 복사.
+    서랍 열고 N칸 선택·다운로드·photos 복사 (N=select_count 또는 coords, 최대 50).
     반환=이번에 복사된(또는 dry_run이면 감지된) 이미지 파일명.
     drawer_menu_downs_override: 방 타입별 Down 횟수 (None=coords 전역값 사용).
+    select_count: 방별 한 배치 칸 수 (None=coords 전역).
     """
     room_hwnd = hwnd_of(room_win)
     # [변경사유]: 방 타입별 drawer_menu_downs 우선 적용
@@ -316,7 +322,11 @@ def download_one_batch(
         drawer_menu_downs_override=drawer_menu_downs_override,
     )
     select_photo_batch(
-        drawer_hwnd, coords, skip_tiles=skip_tiles, dry_run=dry_run
+        drawer_hwnd,
+        coords,
+        skip_tiles=skip_tiles,
+        dry_run=dry_run,
+        select_count=select_count,
     )
     # [변경사유]: 다운로드 직전 스냅샷 — 덮어쓰기도 새 배치로 본다
     before = snapshot_names(download_dir)

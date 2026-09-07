@@ -3,7 +3,14 @@
 #
 # room_type: "open"(오픈 단톡방, drawer Down×2) | "general"(일반 단톡방, drawer Down×3)
 # drawer_menu_downs: 숫자를 직접 쓰면 room_type 기본값을 덮어씀 (캘리브레이션용)
+# select_count: 한 배치 선택 칸 수 10~50 (미지정 시 coords.yaml 전역, 기본 50)
 rooms:
+  - id: danceinfo_registration
+    search: "댄스인포 행사.강습 등록방"
+    enabled: true
+    room_type: open    # 오픈 단톡방
+    # [변경사유]: 작은 등록방 — 배치 10칸
+    select_count: 10
   - id: gangnam_latin
     search: "강남 라틴클럽"
     enabled: true
@@ -14,11 +21,13 @@ rooms:
     room_type: open    # 오픈 단톡방
   # [변경사유]: 수집 대상 방 추가 — id=폴더명, search=카톡 검색 첫 결과
   # [변경사유]: 검색 결과 많음 — 짧은 키워드 대신 방 제목의 고유 구간 사용
+    select_count: 10
   - id: hongdae_bonita
     search: "홍대보니따 오픈채팅방"
     enabled: true
     room_type: open    # 오픈 단톡방
   # [변경사유]: 일반 단톡방 — 서랍 메뉴 Down×3 (오픈 단톡방 Down×2 와 다름)
+    select_count: 10
   - id: info_latin_korea
     search: "(전국라틴댄스)"
     enabled: true

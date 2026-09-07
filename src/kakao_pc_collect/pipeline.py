@@ -9,7 +9,12 @@ import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from kakao_pc_collect.config import RoomSpec, Settings, effective_drawer_menu_downs
+from kakao_pc_collect.config import (
+    RoomSpec,
+    Settings,
+    effective_drawer_menu_downs,
+    effective_select_count,
+)
 from kakao_pc_collect.drawer import (
     click_download,
     open_drawer,
@@ -183,11 +188,19 @@ def collect_room(
     best_stem = watermark
 
     if photos:
+        # [변경사유]: 방별 배치 칸 수(10~50) — skip·선택에 동일 값 사용
+        batch_n = effective_select_count(room, coords.select_count)
+        log.info(
+            "photo select_count room=%s n=%s (coords_default=%s)",
+            room.id,
+            batch_n,
+            coords.select_count,
+        )
         for batch_i in range(max_photo_batches):
             photos_before = _existing_photo_names(photos_dir)
-            skip = batch_i * coords.select_count
+            skip = batch_i * batch_n
 
-            log.info("photo batch=%s skip_tiles=%s", batch_i + 1, skip)
+            log.info("photo batch=%s skip_tiles=%s n=%s", batch_i + 1, skip, batch_n)
 
             # [변경사유]: 방 타입별 drawer_menu_downs — 오픈 단톡방×2, 일반 단톡방×3
             dmd = effective_drawer_menu_downs(room, coords.drawer_menu_downs)
@@ -199,6 +212,7 @@ def collect_room(
                 coords,
                 skip_tiles=skip,
                 dry_run=dry_run,
+                select_count=batch_n,
             )
             # [변경사유]: 선택 직후 스냅샷 — 같은 파일명 덮어쓰기는 mtime으로 감지
             before_dl = snapshot_names(settings.download_dir)
