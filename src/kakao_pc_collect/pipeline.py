@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -26,7 +27,11 @@ from kakao_pc_collect.files import (
     snapshot_names,
     wait_for_new_files,
 )
-from kakao_pc_collect.logging_util import get_logger
+from kakao_pc_collect.logging_util import (
+    attach_file_handler,
+    detach_file_handler,
+    get_logger,
+)
 from kakao_pc_collect.stems import (
     canonical_kakao_name,
     is_kakao_image,
@@ -306,7 +311,13 @@ def run_collect(
 ) -> list[dict]:
     """허용 방 순회 수집."""
     from kakao_pc_collect.admin_notify import send_admin_summary
-    from kakao_pc_collect.run_report import build_run_report, write_run_report
+    from kakao_pc_collect.run_report import (
+        build_run_report,
+        new_run_id,
+        run_archive_dir,
+        write_run_report,
+        write_run_report_latest_and_archive,
+    )
 
     settings.raw_root.mkdir(parents=True, exist_ok=True)
     settings.download_dir.mkdir(parents=True, exist_ok=True)
@@ -319,92 +330,145 @@ def run_collect(
         raise RuntimeError("enabled room 없음 — config/rooms.yaml 확인")
 
     started_at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
-
-    results: list[dict] = []
-    for room in rooms:
-        log.info("=== room %s ===", room.id)
-        try:
-            results.append(
-                collect_room(
-                    settings,
-                    room,
-                    chats=chats,
-                    photos=photos,
-                    dry_run=dry_run,
-                )
-            )
-        except Exception as exc:  # noqa: BLE001
-            log.exception("room failed id=%s", room.id)
-            results.append(
-                {
-                    "room_id": room.id,
-                    "search": room.search,
-                    "error": str(exc),
-                }
-            )
-            continue
-
-    do_import = settings.run_import if run_import is None else run_import
-    do_upload = settings.run_upload if run_upload is None else run_upload
-    import_error: str | None = None
-    if do_import and not dry_run:
-        # [변경사유]: import 체인 완료 직후(시각 추정 없이) opt-in 시 upload --no-dry-run
-        # [변경사유]: CLI --room 이 있으면 import/upload 에도 동일 방 집합 전달 (E2E)
-        try:
-            _call_kakao_import(
-                settings,
-                run_upload=do_upload,
-                room_ids=list(room_ids) if room_ids else None,
-            )
-        except Exception as exc:  # noqa: BLE001 — 리포트·알림 후 재raise
-            import_error = str(exc)
-            log.error("kakao-import chain failed err=%s", import_error)
-
-    # [변경사유]: I5 — 실행 리포트 + (opt-in) 관리자 카톡 요약
+    run_id = new_run_id()
+    file_handler = None
+    run_log_path: Path | None = None
+    import_log_path: Path | None = None
     if not dry_run:
-        report = build_run_report(
-            collect_results=results,
-            import_root=settings.kakao_import_root,
-            room_ids=list(room_ids) if room_ids else [r.id for r in rooms],
-            run_upload=bool(do_upload and do_import),
-            import_error=import_error,
-            started_at=started_at,
-        )
-        report_path = settings.data_dir / "run-report.json"
-        write_run_report(report_path, report)
-        # import data 에도 복사 — 운영이 import 폴더만 볼 때
-        try:
-            write_run_report(
-                settings.kakao_import_root / "data" / "run-report.json", report
-            )
-        except OSError as exc:
-            log.warning("run-report copy to import-root fail err=%s", exc)
+        # [변경사유]: 실행마다 data/runs/<run_id>/ 보존 (최신 run-report.json 덮어쓰기와 별개)
+        arch = run_archive_dir(settings.data_dir, run_id)
+        run_log_path = arch / "collect.log"
+        import_log_path = arch / "import-chain.log"
+        file_handler = attach_file_handler(run_log_path, settings.log_level)
+        log.info("run archive dir=%s", arch)
 
-        notify_search = (settings.admin_notify_search or "").strip()
-        if notify_search:
-            notify_out = send_admin_summary(
-                search=notify_search,
-                text=str(report.get("admin_summary_ko") or ""),
-                coords=settings.coords,
-                dry_run=False,
-            )
-            report["admin_notify"] = notify_out
-            write_run_report(report_path, report)
-            log.info(
-                "admin-notify done ok=%s err=%s",
-                notify_out.get("ok"),
-                notify_out.get("error"),
-            )
-        else:
-            # [변경사유]: 빈 값이면 전송 안 함 — 예전엔 로그 없이 스킵되어 .env 미적용과 구분 불가
-            log.info(
-                "admin-notify skipped — KAKAO_ADMIN_NOTIFY_SEARCH empty "
-                "(set in kakao-pc-collect/.env under PROJECT_ROOT)"
-            )
+    try:
+        results: list[dict] = []
+        for room in rooms:
+            log.info("=== room %s ===", room.id)
+            try:
+                results.append(
+                    collect_room(
+                        settings,
+                        room,
+                        chats=chats,
+                        photos=photos,
+                        dry_run=dry_run,
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.exception("room failed id=%s", room.id)
+                results.append(
+                    {
+                        "room_id": room.id,
+                        "search": room.search,
+                        "error": str(exc),
+                    }
+                )
+                continue
 
-    if import_error:
-        raise RuntimeError(import_error)
-    return results
+        do_import = settings.run_import if run_import is None else run_import
+        do_upload = settings.run_upload if run_upload is None else run_upload
+        import_error: str | None = None
+        if do_import and not dry_run:
+            # [변경사유]: import 체인 완료 직후(시각 추정 없이) opt-in 시 upload --no-dry-run
+            # [변경사유]: CLI --room 이 있으면 import/upload 에도 동일 방 집합 전달 (E2E)
+            try:
+                _call_kakao_import(
+                    settings,
+                    run_upload=do_upload,
+                    room_ids=list(room_ids) if room_ids else None,
+                    log_path=import_log_path,
+                )
+            except Exception as exc:  # noqa: BLE001 — 리포트·알림 후 재raise
+                import_error = str(exc)
+                log.error("kakao-import chain failed err=%s", import_error)
+
+        # [변경사유]: I5 — 실행 리포트 + (opt-in) 관리자 카톡 요약
+        if not dry_run:
+            report = build_run_report(
+                collect_results=results,
+                import_root=settings.kakao_import_root,
+                room_ids=list(room_ids) if room_ids else [r.id for r in rooms],
+                run_upload=bool(do_upload and do_import),
+                import_error=import_error,
+                started_at=started_at,
+                run_id=run_id,
+            )
+            write_run_report_latest_and_archive(
+                settings.data_dir,
+                report,
+                import_root=settings.kakao_import_root,
+            )
+            # import data 에도 최신 복사 — 운영이 import 폴더만 볼 때
+            try:
+                write_run_report(
+                    settings.kakao_import_root / "data" / "run-report.json", report
+                )
+            except OSError as exc:
+                log.warning("run-report copy to import-root fail err=%s", exc)
+
+            notify_search = (settings.admin_notify_search or "").strip()
+            if notify_search:
+                notify_out = send_admin_summary(
+                    search=notify_search,
+                    text=str(report.get("admin_summary_ko") or ""),
+                    coords=settings.coords,
+                    dry_run=False,
+                )
+                report["admin_notify"] = notify_out
+                write_run_report_latest_and_archive(
+                    settings.data_dir,
+                    report,
+                    import_root=settings.kakao_import_root,
+                )
+                log.info(
+                    "admin-notify done ok=%s err=%s",
+                    notify_out.get("ok"),
+                    notify_out.get("error"),
+                )
+            else:
+                # [변경사유]: 빈 값이면 전송 안 함 — 예전엔 로그 없이 스킵되어 .env 미적용과 구분 불가
+                log.info(
+                    "admin-notify skipped — KAKAO_ADMIN_NOTIFY_SEARCH empty "
+                    "(set in kakao-pc-collect/.env under PROJECT_ROOT)"
+                )
+
+        if import_error:
+            raise RuntimeError(import_error)
+        return results
+    finally:
+        if file_handler is not None:
+            detach_file_handler(file_handler)
+
+
+def _run_cmd_logged(
+    cmd: list[str],
+    *,
+    cwd: Path,
+    log_path: Path | None,
+) -> None:
+    """kakao-import 출력을 콘솔과 실행 로그 파일에 같이 남긴다."""
+    log.info("exec %s", " ".join(cmd))
+    proc = subprocess.run(
+        cmd,
+        cwd=str(cwd),
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    out = proc.stdout or ""
+    if out:
+        sys.stderr.write(out if out.endswith("\n") else out + "\n")
+        if log_path is not None:
+            with log_path.open("a", encoding="utf-8") as fp:
+                fp.write(f"\n--- exec {' '.join(cmd)} ---\n")
+                fp.write(out if out.endswith("\n") else out + "\n")
+    if proc.returncode != 0:
+        raise subprocess.CalledProcessError(proc.returncode, cmd)
 
 
 def _call_kakao_import(
@@ -412,6 +476,7 @@ def _call_kakao_import(
     *,
     run_upload: bool = False,
     room_ids: list[str] | None = None,
+    log_path: Path | None = None,
 ) -> None:
     """
     수집 후 kakao-import run + poster-classify --no-review + similar-detect.
@@ -438,9 +503,8 @@ def _call_kakao_import(
     if run_upload:
         cmds.append(["kakao-import", "upload", "--no-dry-run", *room_args])
     for cmd in cmds:
-        log.info("exec %s", " ".join(cmd))
         try:
-            subprocess.run(cmd, cwd=str(root), check=True)
+            _run_cmd_logged(cmd, cwd=root, log_path=log_path)
         except FileNotFoundError:
             py = root / ".venv" / "Scripts" / "python.exe"
             if not py.is_file():
@@ -449,7 +513,7 @@ def _call_kakao_import(
             alt = [str(py), "-m", "kakao_import", *cmd[1:]]
             log.info("fallback exec %s", " ".join(alt))
             try:
-                subprocess.run(alt, cwd=str(root), check=True)
+                _run_cmd_logged(alt, cwd=root, log_path=log_path)
             except subprocess.CalledProcessError as exc:
                 # [변경사유]: upload OFF 일 때만 classify fail-open. upload ON 이면 fail-closed
                 if cmd[1] == "poster-classify" and not run_upload:

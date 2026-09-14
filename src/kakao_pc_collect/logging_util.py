@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from pathlib import Path
 
 _PKG = "kakao_pc_collect"
 
@@ -27,3 +28,22 @@ def get_logger(name: str = _PKG, level: str = "INFO") -> logging.Logger:
         child.removeHandler(handler)
     child.propagate = True
     return child
+
+
+def attach_file_handler(path: Path, level: str = "INFO") -> logging.Handler:
+    """실행별 collect.log — 콘솔 핸들러는 유지하고 파일만 추가."""
+    pkg = logging.getLogger(_PKG)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(path, encoding="utf-8")
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    )
+    handler.setLevel(getattr(logging, level.upper(), logging.INFO))
+    pkg.addHandler(handler)
+    return handler
+
+
+def detach_file_handler(handler: logging.Handler) -> None:
+    pkg = logging.getLogger(_PKG)
+    pkg.removeHandler(handler)
+    handler.close()

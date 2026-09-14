@@ -65,6 +65,36 @@ def test_build_run_report_cookie_expired(tmp_path: Path) -> None:
     assert "실패" in build_admin_summary_ko(report)
 
 
+def test_write_run_report_archives(tmp_path: Path) -> None:
+    # [변경사유]: 실행마다 data/runs/<run_id>/ 보존
+    import_root = tmp_path / "import"
+    data = import_root / "data"
+    data.mkdir(parents=True)
+    (data / "upload-result.json").write_text(
+        json.dumps({"summary": {"OK": 1, "ocr_queued": 1}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    report = build_run_report(
+        collect_results=[{"room_id": "r1", "copied": 2, "error": "timeout"}],
+        import_root=import_root,
+        room_ids=["r1"],
+        run_upload=True,
+        run_id="20260914-091340-1",
+    )
+    assert report["exit_reason"] == "partial_collect_error"
+    from kakao_pc_collect.run_report import write_run_report_latest_and_archive
+
+    data_dir = tmp_path / "collect-data"
+    arch = write_run_report_latest_and_archive(
+        data_dir, report, import_root=import_root
+    )
+    assert (data_dir / "run-report.json").is_file()
+    assert (arch / "run-report.json").is_file()
+    assert (arch / "upload-result.json").is_file()
+    loaded = json.loads((arch / "run-report.json").read_text(encoding="utf-8"))
+    assert loaded["collect"]["room_errors"][0]["room_id"] == "r1"
+
+
 def test_write_run_report(tmp_path: Path) -> None:
     report = {
         "ok": True,

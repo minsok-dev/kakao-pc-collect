@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -11,6 +13,36 @@ from typing import Any
 from kakao_pc_collect.logging_util import get_logger
 
 log = get_logger(__name__)
+
+# [변경사유]: 실행마다 덮어쓰지 않는 이력 — data/runs/<run_id>/
+_UPLOAD_ARTIFACT_NAMES = ("upload-result.json", "last_upload_manifest.json")
+
+
+def new_run_id() -> str:
+    """초 단위 + pid — 같은 초 재실행과 구분."""
+    return datetime.now().strftime("%Y%m%d-%H%M%S") + f"-{os.getpid()}"
+
+
+def run_archive_dir(data_dir: Path, run_id: str) -> Path:
+    d = data_dir / "runs" / run_id
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def copy_upload_artifacts(import_root: Path, dest_dir: Path) -> list[str]:
+    """kakao-import data 의 upload 산출물을 실행 폴더에 복사."""
+    copied: list[str] = []
+    src_dir = import_root / "data"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    for name in _UPLOAD_ARTIFACT_NAMES:
+        src = src_dir / name
+        if not src.is_file():
+            continue
+        shutil.copy2(src, dest_dir / name)
+        copied.append(name)
+    if copied:
+        log.info("run-archive upload artifacts dest=%s files=%s", dest_dir, copied)
+    return copied
 
 
 def _now_iso() -> str:
@@ -97,6 +129,7 @@ def build_run_report(
     run_upload: bool = False,
     import_error: str | None = None,
     started_at: str | None = None,
+    run_id: str | None = None,
 ) -> dict[str, Any]:
     """collect + (선택) upload-result 를 합친 실행 리포트."""
     rooms = room_ids or [
@@ -154,7 +187,7 @@ def build_run_report(
         exit_reason = "success"
 
     report: dict[str, Any] = {
-        "run_id": datetime.now().strftime("%Y%m%d-%H%M%S"),
+        "run_id": run_id or new_run_id(),
         "started_at": started_at or _now_iso(),
         "finished_at": _now_iso(),
         "ok": ok,
@@ -183,3 +216,20 @@ def write_run_report(path: Path, report: dict[str, Any]) -> Path:
     )
     log.info("run-report written path=%s ok=%s reason=%s", path, report.get("ok"), report.get("exit_reason"))
     return path
+
+
+def write_run_report_latest_and_archive(
+    data_dir: Path,
+    report: dict[str, Any],
+    *,
+    import_root: Path | None = None,
+) -> Path:
+    """최신 run-report.json + data/runs/<run_id>/ 이력."""
+    latest = data_dir / "run-report.json"
+    write_run_report(latest, report)
+    run_id = str(report.get("run_id") or new_run_id())
+    arch = run_archive_dir(data_dir, run_id)
+    write_run_report(arch / "run-report.json", report)
+    if import_root is not None:
+        copy_upload_artifacts(import_root, arch)
+    return arch

@@ -70,6 +70,20 @@ kakao-pc-collect run --chats-only
 kakao-pc-collect run --photos-only
 ```
 
+실행 이력 (덮어쓰지 않음):
+
+```text
+kakao-pc-collect/data/run-report.json          ← 항상 마지막 실행
+kakao-pc-collect/data/runs/<시각-pid>/
+  run-report.json     ← 방별 error, 복사 수, hold
+  collect.log
+  import-chain.log    ← kakao-import run/classify/similar/upload 출력
+  upload-result.json  ← 업로드된/스킵/hold 상세 (있으면)
+  last_upload_manifest.json
+```
+
+이미지가 있는데 업로드가 안 된 건은 `runs/<해당시각>/upload-result.json` 의 `by_next`·hold·file_missing 과 `collect.room_errors`를 보면 됩니다.
+
 수집 후 사람 작업 (similar deferred hold분):
 
 ```text
