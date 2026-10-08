@@ -482,6 +482,14 @@ def ensure_search_bar_open(
         if _opened():
             log.info("search bar opened after %s", icon_label)
             return
+    # [변경사유]: 친구 탭은 돋보기로 검색창이 열려도 Edit 크기·개수가 그대로다.
+    # 프로필 이름 칸만 보이므로, 여기서 끊지 않고 포커스된 검색칸에 붙여넣는다.
+    if tab == "friends":
+        log.info(
+            "friends search Edit unchanged after %s — continue to paste",
+            icon_label,
+        )
+        return
     raise RuntimeError(
         f"검색 입력창이 열리지 않음 — 돋보기 좌표({icon_label})를 재측정하거나 "
         "실행 전에 검색창을 열어 두세요. 돋보기는 토글이라 두 번 누르면 닫힙니다. "
@@ -660,15 +668,23 @@ def open_room_by_search(
     # [변경사유]: Edit=0 이면 닫힘 — 탭별 돋보기 1회. 열려 있으면 누르지 않음.
     ensure_search_bar_open(main, hwnd, cfg, side_tab=tab)
 
-    # 1) 검색칸 클릭 — Ctrl+A·X 금지 (채팅/친구 동일 위치)
-    click_client(hwnd, cfg.main_search, dry_run=False, label="main_search")
-    time.sleep(0.35)
-    if _dismiss_friend_add(kakao_hwnd=hwnd):
-        log.warning("friend-add opened after search click — retry search click")
-        click_client(hwnd, cfg.main_search, dry_run=False, label="main_search_retry")
-        time.sleep(0.35)
+    # 1) 검색칸 클릭 — Ctrl+A·X 금지
+    # [변경사유]: 친구 탭 main_search (213,106) 은 DanceInfo 프로필 이름 칸.
+    # 돋보기가 검색칸에 포커스를 주므로 그 좌표는 누르지 않고 바로 붙여넣는다.
+    if tab == "friends":
+        from kakao_pc_collect.win_click import paste_into_hwnd
 
-    pasted = replace_search_text_via_tab(hwnd, search)
+        log.info("friends search paste without main_search click")
+        time.sleep(0.35)
+        pasted = paste_into_hwnd(hwnd, search)
+    else:
+        click_client(hwnd, cfg.main_search, dry_run=False, label="main_search")
+        time.sleep(0.35)
+        if _dismiss_friend_add(kakao_hwnd=hwnd):
+            log.warning("friend-add opened after search click — retry search click")
+            click_client(hwnd, cfg.main_search, dry_run=False, label="main_search_retry")
+            time.sleep(0.35)
+        pasted = replace_search_text_via_tab(hwnd, search)
     if not pasted:
         raise RuntimeError(
             "검색어를 카카오톡 창에 붙여넣지 못함 — 전경이 카톡이 아님. "

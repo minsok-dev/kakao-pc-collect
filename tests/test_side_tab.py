@@ -127,6 +127,35 @@ def test_ensure_search_bar_open_clicks_friends_icon() -> None:
     assert kwargs.get("label") == "friends_search_icon"
 
 
+def test_ensure_search_bar_open_friends_continues_when_edit_unchanged() -> None:
+    """돋보기 뒤에도 프로필 Edit 만 있으면 예외 없이 붙여넣기 단계로 넘긴다."""
+    from kakao_pc_collect.uia_kakao import ensure_search_bar_open
+
+    coords = CoordConfig(
+        friends_search_icon=(367, 57),
+        main_search=(213, 106),
+    )
+    win = MagicMock()
+    clock = {"t": 0.0}
+
+    def _now() -> float:
+        clock["t"] += 1.0
+        return clock["t"]
+
+    with (
+        patch(
+            "kakao_pc_collect.uia_kakao.search_row_edit_open",
+            return_value=False,
+        ),
+        patch("kakao_pc_collect.win_click.click_client") as click,
+        patch("kakao_pc_collect.uia_kakao.time.sleep"),
+        patch("kakao_pc_collect.uia_kakao.time.time", side_effect=_now),
+    ):
+        ensure_search_bar_open(win, 1, coords, side_tab="friends")
+    click.assert_called_once()
+    assert click.call_args.kwargs.get("label") == "friends_search_icon"
+
+
 def test_ensure_side_tab_clicks_friends() -> None:
     coords = CoordConfig(friends_tab=(33, 56), chats_tab=(30, 118))
     with patch("kakao_pc_collect.win_click.click_client") as click:
