@@ -91,17 +91,29 @@ def test_resolve_search_icon_friends_fallback() -> None:
     assert label == "friends_search_icon"
 
 
+def test_edit_rect_is_search_row_requires_header_field() -> None:
+    from kakao_pc_collect.uia_kakao import edit_rect_is_search_row
+
+    # 검색 입력줄 — main_search (213, 106) 을 지나는 가로 필드
+    assert edit_rect_is_search_row(40, 90, 400, 122, (213, 106)) is True
+    # 친구 목록의 다른 Edit — 검색줄이 아님
+    assert edit_rect_is_search_row(20, 400, 200, 430, (213, 106)) is False
+    # 창 전체처럼 높은 컨트롤은 검색 입력줄이 아님
+    assert edit_rect_is_search_row(0, 0, 441, 1032, (213, 106)) is False
+
+
 def test_ensure_search_bar_open_clicks_friends_icon() -> None:
     from kakao_pc_collect.uia_kakao import ensure_search_bar_open
 
     coords = CoordConfig(
         search_icon=(329, 56),
         friends_search_icon=(360, 56),
+        main_search=(213, 106),
     )
     win = MagicMock()
     with (
         patch(
-            "kakao_pc_collect.uia_kakao.search_bar_is_open",
+            "kakao_pc_collect.uia_kakao.search_row_edit_open",
             side_effect=[False, True],
         ),
         patch("kakao_pc_collect.win_click.click_client") as click,

@@ -365,6 +365,58 @@ def search_bar_is_open(win) -> bool:
     return open_
 
 
+def edit_rect_is_search_row(
+    left: int,
+    top: int,
+    right: int,
+    bottom: int,
+    search_xy: tuple[int, int],
+) -> bool:
+    """
+    main_search 좌표를 지나는 가로로 긴 Edit 만 검색 입력줄로 본다.
+    [변경사유]: 친구 탭은 검색창이 닫혀도 Edit 가 1개 있어 돋보기 클릭이 생략됨.
+    """
+    sx, sy = int(search_xy[0]), int(search_xy[1])
+    width = int(right) - int(left)
+    height = int(bottom) - int(top)
+    if width < 80 or height < 8 or height > 80:
+        return False
+    if not (int(top) - 28 <= sy <= int(bottom) + 28):
+        return False
+    if int(right) < sx - 30 or int(left) > sx + 30:
+        return False
+    return True
+
+
+def search_row_edit_open(win, hwnd: int, search_xy: tuple[int, int]) -> bool:
+    """친구 탭 — 검색 입력줄 위치의 Edit 가 있을 때만 열린 것으로 본다."""
+    from kakao_pc_collect.win_click import _client_origin
+
+    ox, oy = _client_origin(int(hwnd))
+    edits = _list_edits(win)
+    for edit in edits:
+        try:
+            rect = edit.rectangle()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("search edit rectangle fail err=%s", exc)
+            continue
+        box = (
+            int(rect.left) - ox,
+            int(rect.top) - oy,
+            int(rect.right) - ox,
+            int(rect.bottom) - oy,
+        )
+        if edit_rect_is_search_row(*box, search_xy):
+            log.info("search row edit open box=%s search=%s", box, search_xy)
+            return True
+    log.info(
+        "search row edit closed search=%s edit_count=%s",
+        search_xy,
+        len(edits),
+    )
+    return False
+
+
 def resolve_search_icon_xy(coords, side_tab: str) -> tuple[tuple[int, int], str]:
     """
     side_tab 에 맞는 헤더 돋보기 client 좌표.
@@ -397,10 +449,19 @@ def ensure_search_bar_open(
     검색창이 닫혀 있으면 탭별 돋보기 1회만 클릭 후 Edit 재확인.
     이미 열려 있으면 돋보기를 누르지 않음 (토글이라 닫힘).
     [변경사유]: side_tab=friends 이면 friends_search_icon 사용.
+    [변경사유]: 친구 탭은 검색줄 Edit 가 없을 때만 돋보기를 누름. 다른 Edit 로 열린 판정 금지.
     """
     from kakao_pc_collect.win_click import click_client
 
-    if search_bar_is_open(win):
+    tab = (side_tab or "chats").strip().lower() or "chats"
+    search_xy = tuple(getattr(coords, "main_search", (213, 106)))
+
+    def _opened() -> bool:
+        if tab == "friends":
+            return search_row_edit_open(win, hwnd, search_xy)
+        return search_bar_is_open(win)
+
+    if _opened():
         return
     icon_xy, icon_label = resolve_search_icon_xy(coords, side_tab)
     log.info(
@@ -413,7 +474,7 @@ def ensure_search_bar_open(
     deadline = time.time() + 2.5
     while time.time() < deadline:
         time.sleep(0.25)
-        if search_bar_is_open(win):
+        if _opened():
             log.info("search bar opened after %s", icon_label)
             return
     raise RuntimeError(
