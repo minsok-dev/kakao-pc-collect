@@ -375,15 +375,17 @@ def edit_rect_is_search_row(
     """
     main_search 좌표를 지나는 가로로 긴 Edit 만 검색 입력줄로 본다.
     [변경사유]: 친구 탭은 검색창이 닫혀도 Edit 가 1개 있어 돋보기 클릭이 생략됨.
+    [변경사유]: 프로필 이름(가로 187, 오른쪽 311)은 검색줄이 아님. 돋보기(x=367) 쪽까지 닿는 넓은 칸만 인정.
     """
     sx, sy = int(search_xy[0]), int(search_xy[1])
     width = int(right) - int(left)
     height = int(bottom) - int(top)
-    if width < 80 or height < 8 or height > 80:
+    # 프로필 이름 칸(실측 187px)보다 넓고, 오른쪽이 돋보기 근처까지 가야 검색 입력줄
+    if width < 250 or int(right) < 350 or height < 8 or height > 80:
         return False
     if not (int(top) - 28 <= sy <= int(bottom) + 28):
         return False
-    if int(right) < sx - 30 or int(left) > sx + 30:
+    if int(left) > sx + 30:
         return False
     return True
 
@@ -394,6 +396,7 @@ def search_row_edit_open(win, hwnd: int, search_xy: tuple[int, int]) -> bool:
 
     ox, oy = _client_origin(int(hwnd))
     edits = _list_edits(win)
+    boxes: list[tuple[int, int, int, int]] = []
     for edit in edits:
         try:
             rect = edit.rectangle()
@@ -406,13 +409,15 @@ def search_row_edit_open(win, hwnd: int, search_xy: tuple[int, int]) -> bool:
             int(rect.right) - ox,
             int(rect.bottom) - oy,
         )
+        boxes.append(box)
         if edit_rect_is_search_row(*box, search_xy):
             log.info("search row edit open box=%s search=%s", box, search_xy)
             return True
     log.info(
-        "search row edit closed search=%s edit_count=%s",
+        "search row edit closed search=%s edit_count=%s boxes=%s",
         search_xy,
         len(edits),
+        boxes,
     )
     return False
 

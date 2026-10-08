@@ -94,8 +94,10 @@ def test_resolve_search_icon_friends_fallback() -> None:
 def test_edit_rect_is_search_row_requires_header_field() -> None:
     from kakao_pc_collect.uia_kakao import edit_rect_is_search_row
 
-    # 검색 입력줄 — main_search (213, 106) 을 지나는 가로 필드
+    # 검색 입력줄 — 돋보기(x=367) 쪽까지 닿는 넓은 칸
     assert edit_rect_is_search_row(40, 90, 400, 122, (213, 106)) is True
+    # 2026-10-08 실측: 프로필 이름 DanceInfo. 가로 187·오른쪽 311 이라 검색줄이 아님
+    assert edit_rect_is_search_row(124, 95, 311, 118, (213, 106)) is False
     # 친구 목록의 다른 Edit — 검색줄이 아님
     assert edit_rect_is_search_row(20, 400, 200, 430, (213, 106)) is False
     # 창 전체처럼 높은 컨트롤은 검색 입력줄이 아님
