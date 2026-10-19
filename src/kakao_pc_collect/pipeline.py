@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import time
@@ -380,6 +381,10 @@ def run_collect(
                     room_ids=list(room_ids) if room_ids else None,
                     log_path=import_log_path,
                 )
+            except ImportBusy as exc:
+                # [변경사유]: 먼저 도는 전체 수집이 DB를 잡고 있으면 이번 회차는 건너뛴다
+                import_error = f"import_busy: {exc}"
+                log.error("kakao-import busy skip err=%s", exc)
             except Exception as exc:  # noqa: BLE001 — 리포트·알림 후 재raise
                 import_error = str(exc)
                 log.error("kakao-import chain failed err=%s", import_error)
@@ -434,7 +439,7 @@ def run_collect(
                     "(set in kakao-pc-collect/.env under PROJECT_ROOT)"
                 )
 
-        if import_error:
+        if import_error and not str(import_error).startswith("import_busy:"):
             raise RuntimeError(import_error)
         return results
     finally:
@@ -468,7 +473,68 @@ def _run_cmd_logged(
                 fp.write(f"\n--- exec {' '.join(cmd)} ---\n")
                 fp.write(out if out.endswith("\n") else out + "\n")
     if proc.returncode != 0:
-        raise subprocess.CalledProcessError(proc.returncode, cmd)
+        raise subprocess.CalledProcessError(proc.returncode, cmd, output=out)
+
+
+class ImportBusy(RuntimeError):
+    """다른 수집이 kakao_local.db 쓰기를 잡고 있다."""
+
+
+def _pid_alive(pid: int) -> bool:
+    """프로세스가 아직 있으면 True. 권한 없음도 살아 있는 것으로 본다."""
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _lock_path(import_root: Path) -> Path:
+    return import_root / "data" / "import-run.lock"
+
+
+def _read_lock_pid(path: Path) -> int:
+    try:
+        line = path.read_text(encoding="utf-8").splitlines()[0].strip()
+        return int(line)
+    except (OSError, IndexError, ValueError):
+        return 0
+
+
+def _acquire_import_lock(import_root: Path) -> Path | None:
+    """잠금을 잡으면 경로. 다른 살아 있는 pid 가 잡고 있으면 None."""
+    path = _lock_path(import_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_file():
+        pid = _read_lock_pid(path)
+        if pid and pid != os.getpid() and _pid_alive(pid):
+            log.error("import lock busy pid=%s path=%s", pid, path)
+            return None
+        log.info("import lock stale pid=%s path=%s", pid, path)
+    path.write_text(f"{os.getpid()}\n", encoding="utf-8")
+    log.info("import lock acquired pid=%s path=%s", os.getpid(), path)
+    return path
+
+
+def _release_import_lock(path: Path | None) -> None:
+    if path is None or not path.is_file():
+        return
+    try:
+        if _read_lock_pid(path) == os.getpid():
+            path.unlink()
+            log.info("import lock released path=%s", path)
+    except OSError as exc:
+        log.warning("import lock release fail path=%s err=%s", path, exc)
+
+
+def _raise_if_db_locked(exc: subprocess.CalledProcessError) -> None:
+    text = f"{exc}\n{exc.output or ''}"
+    if "database is locked" in text:
+        raise ImportBusy("database is locked") from exc
 
 
 def _call_kakao_import(
@@ -490,6 +556,27 @@ def _call_kakao_import(
         run_upload,
         room_ids,
     )
+    lock = _acquire_import_lock(root)
+    if lock is None:
+        raise ImportBusy(f"lock held path={_lock_path(root)}")
+    try:
+        _call_kakao_import_cmds(
+            root,
+            run_upload=run_upload,
+            room_ids=room_ids,
+            log_path=log_path,
+        )
+    finally:
+        _release_import_lock(lock)
+
+
+def _call_kakao_import_cmds(
+    root: Path,
+    *,
+    run_upload: bool,
+    room_ids: list[str] | None,
+    log_path: Path | None,
+) -> None:
     room_args: list[str] = []
     for rid in room_ids or []:
         room_args.extend(["--room", rid])
@@ -515,6 +602,7 @@ def _call_kakao_import(
             try:
                 _run_cmd_logged(alt, cwd=root, log_path=log_path)
             except subprocess.CalledProcessError as exc:
+                _raise_if_db_locked(exc)
                 # [변경사유]: upload OFF 일 때만 classify fail-open. upload ON 이면 fail-closed
                 if cmd[1] == "poster-classify" and not run_upload:
                     log.error("poster-classify failed code=%s — continue", exc.returncode)
@@ -522,6 +610,7 @@ def _call_kakao_import(
                 log.error("kakao-import failed cmd=%s code=%s", cmd, exc.returncode)
                 raise
         except subprocess.CalledProcessError as exc:
+            _raise_if_db_locked(exc)
             if cmd[1] == "poster-classify" and not run_upload:
                 log.error("poster-classify failed code=%s — continue", exc.returncode)
                 continue

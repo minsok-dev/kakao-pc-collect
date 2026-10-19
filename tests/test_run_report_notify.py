@@ -63,6 +63,123 @@ def test_build_run_report_cookie_expired(tmp_path: Path) -> None:
     assert report["exit_reason"] == "cookie_expired"
     assert report["cookie"]["ok"] is False
     assert "실패" in build_admin_summary_ko(report)
+    assert "cookie_expired" in report["admin_summary_ko"]
+
+
+def test_import_busy_is_skip_not_upload_failure(tmp_path: Path) -> None:
+    # [변경사유]: DB 잠금은 import_or_upload_failed 가 아니라 건너뜀
+    report = build_run_report(
+        collect_results=[{"room_id": "danceinfo_registration", "copied": 0}],
+        import_root=tmp_path,
+        room_ids=["danceinfo_registration"],
+        run_upload=True,
+        import_error="import_busy: database is locked",
+    )
+    assert report["ok"] is False
+    assert report["exit_reason"] == "import_busy_skipped"
+    summary = build_admin_summary_ko(report)
+    assert "import_busy_skipped" in summary
+    assert "건너뜀" in summary
+
+
+def test_sha_401_is_not_cookie_expired(tmp_path: Path) -> None:
+    # [변경사유]: 성공 응답 SHA 의 401 부분문자열이 cookie_expired 로 나가면 안 됨
+    import_root = tmp_path / "import"
+    data = import_root / "data"
+    data.mkdir(parents=True)
+    (data / "upload-result.json").write_text(
+        json.dumps(
+            {
+                "summary": {"OK": 1, "FAIL": 0, "ocr_queued": 1},
+                "results": [
+                    {
+                        "ok": True,
+                        "rel": "info_latin_korea/photos/a.jpg",
+                        "response": {
+                            "source_sha256": "afa2080e067dd1ea6ff119ceed1c9a70338f85fbb27f82b4dca46234011b6da2"
+                        },
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    report = build_run_report(
+        collect_results=[{"room_id": "info_latin_korea", "copied": 1}],
+        import_root=import_root,
+        room_ids=["info_latin_korea"],
+        run_upload=True,
+    )
+    assert report["ok"] is True
+    assert report["exit_reason"] == "success"
+    assert report["cookie"]["ok"] is True
+    assert "cookie_expired" not in report["admin_summary_ko"]
+
+
+def test_message_too_long_is_upload_reason_not_cookie(tmp_path: Path) -> None:
+    # [변경사유]: HTTP 400 은 쿠키 만료가 아니라 해당 오류 문구를 사유로 보여 준다
+    import_root = tmp_path / "import"
+    data = import_root / "data"
+    data.mkdir(parents=True)
+    (data / "upload-result.json").write_text(
+        json.dumps(
+            {
+                "summary": {"OK": 4, "FAIL": 1, "ocr_queued": 4},
+                "results": [
+                    {
+                        "ok": True,
+                        "response": {
+                            "source_sha256": "afa2080e067dd1ea6ff119ceed1c9a70338f85fbb27f82b4dca46234011b6da2"
+                        },
+                    },
+                    {
+                        "ok": False,
+                        "error": "HTTP 400 MESSAGE_TOO_LONG",
+                        "rel": "gangnam_latin/photos/KakaoTalk_20261016_045031018.png",
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    report = build_run_report(
+        collect_results=[{"room_id": "gangnam_latin", "copied": 5}],
+        import_root=import_root,
+        room_ids=["gangnam_latin"],
+        run_upload=True,
+    )
+    assert report["ok"] is False
+    assert report["exit_reason"] == "HTTP 400 MESSAGE_TOO_LONG"
+    assert report["cookie"]["ok"] is True
+    assert "cookie_expired" not in report["admin_summary_ko"]
+    assert "MESSAGE_TOO_LONG" in report["admin_summary_ko"]
+
+
+def test_http_401_result_is_cookie_expired(tmp_path: Path) -> None:
+    # [변경사유]: 항목 error 가 HTTP 401 이면 쿠키 만료로 유지
+    import_root = tmp_path / "import"
+    data = import_root / "data"
+    data.mkdir(parents=True)
+    (data / "upload-result.json").write_text(
+        json.dumps(
+            {
+                "summary": {"OK": 0, "FAIL": 1},
+                "results": [{"ok": False, "error": "HTTP 401 Unauthorized"}],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    report = build_run_report(
+        collect_results=[{"room_id": "r1", "copied": 1}],
+        import_root=import_root,
+        room_ids=["r1"],
+        run_upload=True,
+    )
+    assert report["exit_reason"] == "cookie_expired"
+    assert report["cookie"]["ok"] is False
 
 
 def test_write_run_report_archives(tmp_path: Path) -> None:

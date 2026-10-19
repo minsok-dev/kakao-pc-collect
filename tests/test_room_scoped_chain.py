@@ -32,9 +32,9 @@ def _settings(tmp_path: Path) -> Settings:
 def test_call_passes_room_and_no_review(monkeypatch, tmp_path: Path) -> None:
     seen: list[list[str]] = []
 
-    def fake_run(cmd, cwd=None, check=False):  # noqa: ANN001
+    def fake_run(cmd, cwd=None, check=False, **_kwargs):  # noqa: ANN001
         seen.append(list(cmd))
-        return MagicMock(returncode=0)
+        return MagicMock(returncode=0, stdout="")
 
     monkeypatch.setattr(col_pipe.subprocess, "run", fake_run)
     (tmp_path / "import").mkdir()
@@ -56,11 +56,11 @@ def test_call_passes_room_and_no_review(monkeypatch, tmp_path: Path) -> None:
 def test_classify_fail_closed_blocks_upload(monkeypatch, tmp_path: Path) -> None:
     calls: list[str] = []
 
-    def fake_run(cmd, cwd=None, check=False):  # noqa: ANN001
+    def fake_run(cmd, cwd=None, check=False, **_kwargs):  # noqa: ANN001
         calls.append(cmd[1])
         if cmd[1] == "poster-classify":
             raise col_pipe.subprocess.CalledProcessError(1, cmd)
-        return MagicMock(returncode=0)
+        return MagicMock(returncode=0, stdout="")
 
     monkeypatch.setattr(col_pipe.subprocess, "run", fake_run)
     (tmp_path / "import").mkdir()
@@ -74,11 +74,11 @@ def test_classify_fail_closed_blocks_upload(monkeypatch, tmp_path: Path) -> None
 def test_classify_fail_open_without_upload(monkeypatch, tmp_path: Path) -> None:
     calls: list[str] = []
 
-    def fake_run(cmd, cwd=None, check=False):  # noqa: ANN001
+    def fake_run(cmd, cwd=None, check=False, **_kwargs):  # noqa: ANN001
         calls.append(cmd[1])
         if cmd[1] == "poster-classify":
             raise col_pipe.subprocess.CalledProcessError(1, cmd)
-        return MagicMock(returncode=0)
+        return MagicMock(returncode=0, stdout="")
 
     monkeypatch.setattr(col_pipe.subprocess, "run", fake_run)
     (tmp_path / "import").mkdir()
@@ -91,11 +91,11 @@ def test_similar_fail_blocks_upload(monkeypatch, tmp_path: Path) -> None:
     """[변경사유]: S3 — similar-detect 실패 시 upload 미호출 (check=True 계약 고정)."""
     calls: list[str] = []
 
-    def fake_run(cmd, cwd=None, check=False):  # noqa: ANN001
+    def fake_run(cmd, cwd=None, check=False, **_kwargs):  # noqa: ANN001
         calls.append(cmd[1])
         if cmd[1] == "similar-detect":
             raise col_pipe.subprocess.CalledProcessError(1, cmd)
-        return MagicMock(returncode=0)
+        return MagicMock(returncode=0, stdout="")
 
     monkeypatch.setattr(col_pipe.subprocess, "run", fake_run)
     (tmp_path / "import").mkdir()

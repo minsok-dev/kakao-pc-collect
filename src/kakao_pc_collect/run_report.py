@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -67,23 +68,67 @@ def _load_upload_result(import_root: Path) -> dict[str, Any] | None:
     return None
 
 
+# [변경사유]: 업로드 JSON 전체에서 "401" 을 찾으면 SHA(…34011…)가 cookie_expired 로 오인됨
+# 인증 판별은 실행 오류·항목 error 문구만 본다. 성공 응답 본문(해시)은 제외.
+_AUTH_ERROR_RE = re.compile(
+    r"session_cookie|unauthorized|\bcookie\b|인증|로그인|(?<![0-9a-f])401(?![0-9a-f])",
+    re.IGNORECASE,
+)
+
+
+def _upload_result_errors(upload: dict[str, Any] | None) -> list[str]:
+    """업로드 요약·실패 항목의 error 문구. 성공 응답의 SHA 는 포함하지 않는다."""
+    if not isinstance(upload, dict):
+        return []
+    found: list[str] = []
+    summary = upload.get("summary") if isinstance(upload.get("summary"), dict) else {}
+    for raw in (upload.get("error"), summary.get("error")):
+        text = str(raw or "").strip()
+        if text:
+            found.append(text)
+    results = upload.get("results")
+    if isinstance(results, list):
+        for item in results:
+            if not isinstance(item, dict) or item.get("ok") is not False:
+                continue
+            text = str(item.get("error") or "").strip()
+            if text:
+                found.append(text)
+    return found
+
+
+def _is_auth_error_text(text: str) -> bool:
+    """쿠키 미설정·HTTP 401·인증 문구만 참. 해시 한가운데의 401 은 제외."""
+    return bool(text and _AUTH_ERROR_RE.search(text))
+
+
 def _detect_cookie_issue(upload: dict[str, Any] | None, error: str | None) -> bool:
-    """쿠키/인증 실패 추정."""
-    blob = " ".join(
-        [
-            str(error or ""),
-            json.dumps(upload or {}, ensure_ascii=False)[:2000],
-        ]
-    ).lower()
-    markers = (
-        "session_cookie",
-        "unauthorized",
-        "401",
-        "cookie",
-        "인증",
-        "로그인",
-    )
-    return any(m in blob for m in markers)
+    """쿠키/인증 실패. 성공 건 SHA 에 401 이 있어도 쿠키 오류가 아니다."""
+    texts = [str(error or "").strip(), *_upload_result_errors(upload)]
+    return any(_is_auth_error_text(t) for t in texts)
+
+
+def _non_cookie_upload_fail_reason(upload: dict[str, Any] | None) -> str | None:
+    """쿠키가 아닌 업로드 실패 문구. 없으면 summary FAIL 건수 only 일 때 upload_http_fail."""
+    reasons: list[str] = []
+    for text in _upload_result_errors(upload):
+        if _is_auth_error_text(text):
+            continue
+        compact = " ".join(text.split())
+        if compact and compact not in reasons:
+            reasons.append(compact)
+    if reasons:
+        return "; ".join(reasons)[:120]
+    if not isinstance(upload, dict):
+        return None
+    summary = upload.get("summary") if isinstance(upload.get("summary"), dict) else upload
+    try:
+        fail_n = int(summary.get("FAIL", summary.get("fail", summary.get("http_fail"))) or 0)
+    except (TypeError, ValueError):
+        return None
+    if fail_n > 0:
+        return "upload_http_fail"
+    return None
 
 
 def build_admin_summary_ko(report: dict[str, Any]) -> str:
@@ -116,6 +161,8 @@ def build_admin_summary_ko(report: dict[str, Any]) -> str:
     if reason and reason not in ("success",):
         lines.append(f"사유: {reason}")
     if report.get("error"):
+        if reason == "import_busy_skipped":
+            lines.append("다른 수집이 DB를 사용 중이라 이번 import는 건너뜀")
         lines.append(f"오류: {str(report.get('error'))[:120]}")
     lines.append(f"시각: {str(report.get('finished_at') or '')[:19]}")
     return "\n".join(lines)
@@ -169,9 +216,14 @@ def build_run_report(
         }
 
     cookie_bad = _detect_cookie_issue(upload_raw, import_error)
+    busy = bool(import_error and str(import_error).startswith("import_busy:"))
     ok = import_error is None and not room_errors and not cookie_bad
     if cookie_bad:
         exit_reason = "cookie_expired"
+        ok = False
+    elif busy:
+        # [변경사유]: DB 잠금은 실패가 아니라 먼저 시작한 수집이 끝날 때까지 건너뛴 것
+        exit_reason = "import_busy_skipped"
         ok = False
     elif import_error:
         exit_reason = "import_or_upload_failed"
@@ -184,7 +236,13 @@ def build_run_report(
         # 일부 방만 실패해도 리포트는 남기되 ok=false
         ok = False
     else:
-        exit_reason = "success"
+        # [변경사유]: 쿠키 오인이 아니면 항목 오류(MESSAGE_TOO_LONG 등)를 사유로 표시
+        fail_reason = _non_cookie_upload_fail_reason(upload_raw) if run_upload else None
+        if fail_reason:
+            exit_reason = fail_reason
+            ok = False
+        else:
+            exit_reason = "success"
 
     report: dict[str, Any] = {
         "run_id": run_id or new_run_id(),
