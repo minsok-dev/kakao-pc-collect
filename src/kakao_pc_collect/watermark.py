@@ -31,6 +31,22 @@ def save_watermarks(path: Path, data: dict[str, str]) -> None:
     )
 
 
+def max_stem_in_room_photos(photos_dir: Path) -> str | None:
+    """photos 와 같은 방 non_posters 중 더 큰 스템.
+
+    [변경사유]: non_poster 로 빼 둔 파일보다 과거를 다시 받지 않게 한다.
+    """
+    stems = [
+        stem
+        for stem in (
+            max_stem_in_dir(photos_dir),
+            max_stem_in_dir(photos_dir.parent / "non_posters"),
+        )
+        if stem
+    ]
+    return max(stems) if stems else None
+
+
 def max_stem_in_dir(folder: Path) -> str | None:
     """폴더 안 KakaoTalk 이미지 스템 최댓값."""
     if not folder.is_dir():

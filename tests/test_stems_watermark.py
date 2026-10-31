@@ -6,6 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from kakao_pc_collect.pipeline import (
+    _existing_photo_names,
     _names_on_or_after,
     _should_stop_room,
     first_run_cutoff_stem,
@@ -14,6 +15,7 @@ from kakao_pc_collect.stems import canonical_kakao_name, is_kakao_image, parse_k
 from kakao_pc_collect.watermark import (
     load_watermarks,
     max_stem_among,
+    max_stem_in_room_photos,
     min_stem_among,
     save_watermarks,
     unique_stems,
@@ -173,3 +175,18 @@ def test_should_stop_first_run_continue() -> None:
     )
     assert stop is False
     assert reason == "continue"
+
+
+def test_non_posters_count_as_already_collected(tmp_path: Path) -> None:
+    # [변경사유]: non_posters 에 있는 이름·더 큰 스템도 이미 받은 것으로 본다
+    room = tmp_path / "gangnam"
+    photos = room / "photos"
+    parked = room / "non_posters"
+    photos.mkdir(parents=True)
+    parked.mkdir()
+    older = "KakaoTalk_20260815_100000000.png"
+    newer = "KakaoTalk_20260816_120000000.png"
+    (photos / older).write_bytes(b"a")
+    (parked / newer).write_bytes(b"b")
+    assert _existing_photo_names(photos) == {older, newer}
+    assert max_stem_in_room_photos(photos) == "20260816_120000000"

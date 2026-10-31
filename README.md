@@ -6,6 +6,7 @@
 ```text
 kakao-import-local/input/raw/<room_id>/chats/*.txt
 kakao-import-local/input/raw/<room_id>/photos/KakaoTalk_*
+kakao-import-local/input/raw/<room_id>/non_posters/KakaoTalk_*   ← import가 확정한 비포스터. 수집기는 쓰지 않음
 ```
 
 계약·실측: [kakao-pc-collect-plan.md](../kakao-import-local/docs/kakao-pc-collect-plan.md)  
@@ -17,7 +18,7 @@ kakao-import-local/input/raw/<room_id>/photos/KakaoTalk_*
 1. 허용 방 검색 → Enter → ☰ · 서랍 첫 사진 · 다운로드 **창 클라이언트 상대 좌표**로 사진 배치
    (서랍 선택은 `arrow_mode: right` — Shift+RIGHT만. 줄 끝은 카톡이 다음 줄로 넘김)
 2. Documents `카카오톡 받은 파일` → 신규 `KakaoTalk_*.png/jpg`만 이름 유지 복사 → `<room_id>/photos/`
-3. 방별 워터마크 스템으로 배치 중단
+3. 방별 워터마크 스템으로 배치 중단. 저장된 워터마크가 없으면 `photos/`와 `non_posters/` 중 더 큰 스템을 쓴다. 두 폴더에 이미 있는 카카오 파일명은 다시 받지 않는다
 4. **Ctrl+S** 로 대화 txt → `<room_id>/chats/` (사진 수집 **이후** — 다운로드 중 생긴 캡션 포함)
 5. 성공 시 `kakao-import run` + `poster-classify --no-review` + `similar-detect` 호출.
    `KAKAO_COLLECT_RUN_UPLOAD=1` 또는 `--with-upload` 일 때만 이어서 `upload --no-dry-run` (기본은 upload 안 함).

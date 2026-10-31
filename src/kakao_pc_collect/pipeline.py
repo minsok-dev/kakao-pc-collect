@@ -48,7 +48,7 @@ from kakao_pc_collect.uia_kakao import (
 from kakao_pc_collect.watermark import (
     load_watermarks,
     max_stem_among,
-    max_stem_in_dir,
+    max_stem_in_room_photos,
     min_stem_among,
     save_watermarks,
     unique_stems,
@@ -78,10 +78,19 @@ def _names_on_or_after(names: list[str], cutoff: str) -> list[str]:
     return kept
 
 
-def _existing_photo_names(photos_dir: Path) -> set[str]:
-    if not photos_dir.is_dir():
+def _kakao_image_names(folder: Path) -> set[str]:
+    """폴더 직속 카카오 이미지 파일명."""
+    if not folder.is_dir():
         return set()
-    return {p.name for p in photos_dir.iterdir() if p.is_file() and is_kakao_image(p.name)}
+    return {p.name for p in folder.iterdir() if p.is_file() and is_kakao_image(p.name)}
+
+
+def _existing_photo_names(photos_dir: Path) -> set[str]:
+    """photos + 같은 방 non_posters.
+
+    [변경사유]: 빼 둔 non_poster 를 다음 수집이 photos 로 다시 받지 않게 한다.
+    """
+    return _kakao_image_names(photos_dir) | _kakao_image_names(photos_dir.parent / "non_posters")
 
 
 def _close_drawer() -> None:
@@ -168,7 +177,8 @@ def collect_room(
     chats_dir.mkdir(parents=True, exist_ok=True)
     photos_dir.mkdir(parents=True, exist_ok=True)
     # [변경사유]: 워터마크·기존 파일은 방 폴더 기준
-    watermark = marks.get(room.id) or max_stem_in_dir(photos_dir)
+    # [변경사유]: 저장된 워터마크가 없으면 photos·non_posters 중 더 큰 스템
+    watermark = marks.get(room.id) or max_stem_in_room_photos(photos_dir)
     # [변경사유]: 저장된 사진·워터마크가 없으면 최근 3일만 (신규 방 포함)
     first_run_cutoff = None if watermark else first_run_cutoff_stem()
     log.info(
@@ -204,6 +214,8 @@ def collect_room(
         )
         for batch_i in range(max_photo_batches):
             photos_before = _existing_photo_names(photos_dir)
+            # [변경사유]: 복사 하한은 photos 에 남은 장만 본다. non_posters 는 이미 받은 이름 판정에만 쓴다
+            photos_only = _kakao_image_names(photos_dir)
             skip = batch_i * batch_n
 
             log.info("photo batch=%s skip_tiles=%s n=%s", batch_i + 1, skip, batch_n)
@@ -238,8 +250,8 @@ def collect_room(
             to_copy = new_names
             # [변경사유]: 첫 수집 3일 컷 + 이후에는 이미 가진 가장 오래된 스템보다 과거는 복사하지 않음
             copy_floor = first_run_cutoff
-            if copy_floor is None and photos_before:
-                copy_floor = min_stem_among(list(photos_before))
+            if copy_floor is None and photos_only:
+                copy_floor = min_stem_among(list(photos_only))
             if copy_floor:
                 to_copy = _names_on_or_after(new_names, copy_floor)
                 skipped_old = len(new_names) - len(to_copy)
