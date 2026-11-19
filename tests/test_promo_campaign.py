@@ -19,7 +19,7 @@ from kakao_pc_collect.promo_campaign import (
     pending_plans,
     sent_path_for,
 )
-from kakao_pc_collect.promo_send import run_promo
+from kakao_pc_collect.promo_send import image_enter_hwnd, run_promo
 
 
 def _specs() -> list[RoomSpec]:
@@ -288,6 +288,36 @@ rooms:
     plans = build_plans(load_campaign(path), _specs())
     assert pending_plans(plans, load_sent(sent_path_for(path)), force=False) == []
     assert len(pending_plans(plans, load_sent(sent_path_for(path)), force=True)) == 1
+
+
+def test_image_enter_goes_to_clipboard_dialog() -> None:
+    assert (
+        image_enter_hwnd(
+            room_hwnd=10,
+            foreground_hwnd=99,
+            foreground_title="클립보드 이미지 전송",
+            dialog_hwnd=77,
+        )
+        == 77
+    )
+    assert (
+        image_enter_hwnd(
+            room_hwnd=10,
+            foreground_hwnd=10,
+            foreground_title="댄스인포관리자",
+            dialog_hwnd=None,
+        )
+        == 10
+    )
+    assert (
+        image_enter_hwnd(
+            room_hwnd=10,
+            foreground_hwnd=3,
+            foreground_title="메모장",
+            dialog_hwnd=None,
+        )
+        is None
+    )
 
 
 def test_missing_image_helper(tmp_path: Path) -> None:

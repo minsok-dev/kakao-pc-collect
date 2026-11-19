@@ -33,6 +33,28 @@ IMAGE_AFTER_ENTER_SEC = 1.2
 TEXT_BEFORE_ENTER_SEC = 0.25
 TEXT_AFTER_ENTER_SEC = 0.55
 BETWEEN_ROOMS_SEC = 2.0
+# [변경사유]: 카톡이 클립보드 사진을 이 창으로 열고, Enter 가 전송이다.
+CLIPBOARD_IMAGE_TITLE = "클립보드 이미지 전송"
+
+
+def image_enter_hwnd(
+    *,
+    room_hwnd: int,
+    foreground_hwnd: int,
+    foreground_title: str,
+    dialog_hwnd: int | None,
+) -> int | None:
+    """
+    사진 붙여넣기 뒤 Enter 를 받을 창.
+    클립보드 이미지 전송 창이 있으면 그 창. 아직 방 창이 전경이면 방.
+    """
+    if dialog_hwnd:
+        return int(dialog_hwnd)
+    if CLIPBOARD_IMAGE_TITLE in (foreground_title or ""):
+        return int(foreground_hwnd)
+    if foreground_hwnd and int(foreground_hwnd) == int(room_hwnd):
+        return int(room_hwnd)
+    return None
 
 
 def _message_input_xy(hwnd: int, coords: Any) -> tuple[int, int]:
@@ -55,10 +77,73 @@ def _focus_input(hwnd: int, coords: Any) -> None:
     time.sleep(0.15)
 
 
+def _confirm_pasted_image(room_hwnd: int) -> None:
+    """
+    클립보드 이미지 전송 창이 방 창을 가리면 그 창에 Enter.
+    [변경사유]: 방 hwnd 가 아니면 Enter 를 건너뛰어 전송 창이 열린 채 실패했다.
+    """
+    from kakao_pc_collect.win_click import (
+        bring_to_front,
+        find_hwnd_by_title_contains,
+        foreground_hwnd,
+        press_enter_if_foreground,
+        window_title,
+    )
+
+    deadline = time.time() + 2.5
+    last_fg = 0
+    last_title = ""
+    while time.time() < deadline:
+        dialog = find_hwnd_by_title_contains(CLIPBOARD_IMAGE_TITLE)
+        fg = int(foreground_hwnd() or 0)
+        title = window_title(fg) if fg else ""
+        last_fg, last_title = fg, title
+        target = image_enter_hwnd(
+            room_hwnd=room_hwnd,
+            foreground_hwnd=fg,
+            foreground_title=title,
+            dialog_hwnd=int(dialog) if dialog else None,
+        )
+        if target is None:
+            time.sleep(0.15)
+            continue
+        if int(target) != fg:
+            bring_to_front(int(target))
+            time.sleep(0.12)
+        if press_enter_if_foreground(int(target)):
+            log.info(
+                "promo image enter hwnd=%s title=%r",
+                target,
+                window_title(int(target)),
+            )
+            return
+        time.sleep(0.15)
+    log.warning(
+        "promo image enter skipped fg=%s title=%r room=%s",
+        last_fg,
+        last_title,
+        room_hwnd,
+    )
+    raise RuntimeError("enter_failed")
+
+
+def _wait_clipboard_dialog_closed() -> None:
+    """전송 창이 닫힌 뒤에 다음 문구를 붙인다. 설명 칸(50자)으로 들어가지 않게."""
+    from kakao_pc_collect.win_click import find_hwnd_by_title_contains
+
+    deadline = time.time() + 2.0
+    while time.time() < deadline:
+        if not find_hwnd_by_title_contains(CLIPBOARD_IMAGE_TITLE):
+            return
+        time.sleep(0.1)
+    log.warning("promo clipboard image dialog still open")
+
+
 def send_step_to_room(hwnd: int, step: PromoStep, coords: Any) -> None:
     """
     말풍선 하나.
-    이미지는 클립보드 DIB 붙여넣기 후 Enter, 글·URL 은 텍스트 붙여넣기 후 Enter.
+    이미지는 클립보드에 붙인 뒤, 전송 창이 열리면 그 창에 Enter.
+    글·URL 은 방 입력칸에 붙여넣기 후 Enter.
     """
     from kakao_pc_collect.win_click import (
         ctrl_v_if_foreground,
@@ -73,12 +158,14 @@ def send_step_to_room(hwnd: int, step: PromoStep, coords: Any) -> None:
         if not ctrl_v_if_foreground(hwnd):
             raise RuntimeError("image_paste_failed")
         time.sleep(IMAGE_BEFORE_ENTER_SEC)
+        _confirm_pasted_image(hwnd)
+        _wait_clipboard_dialog_closed()
     else:
         if not paste_into_hwnd(hwnd, step.value):
             raise RuntimeError("text_paste_failed")
         time.sleep(TEXT_BEFORE_ENTER_SEC)
-    if not press_enter_if_foreground(hwnd):
-        raise RuntimeError("enter_failed")
+        if not press_enter_if_foreground(hwnd):
+            raise RuntimeError("enter_failed")
     time.sleep(IMAGE_AFTER_ENTER_SEC if step.kind == "image" else TEXT_AFTER_ENTER_SEC)
     if step.kind == "image":
         log.info("promo sent step=%s kind=image file=%s", step.label, Path(step.value).name)
