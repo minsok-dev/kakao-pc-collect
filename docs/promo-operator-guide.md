@@ -103,8 +103,10 @@ body: |
   일정과 장소는 아래 링크에서 확인하세요.
 rooms:
   - id: gangnam_latin
+    enabled: true
     url: "https://danceinfo.net/lessons"
   - id: hongdae_bonita
+    enabled: false
     url: "https://danceinfo.net/lessons"
     image2: poster-extra.jpg
     body2: |
@@ -122,6 +124,7 @@ rooms:
 | `body` | 아니오 | 모든 방에 보낼 공통 문구. `\|` 다음 줄부터 적고, 줄 앞에 띄어쓰기 2칸을 유지합니다 |
 | `rooms` | 예 | 보낼 방 목록. 한 칸도 없으면 오류입니다 |
 | `rooms`의 `id` | 예 | 3절 표에 있는 id |
+| `enabled` | 아니오 | `true` 인 방만 전송. `false` 면 그 방은 건너뛴다. 줄을 빼면 `true` |
 | `url` | 그 방에 바로가기를 넣을 때 | `https://`로 시작하는 주소만. 설명 문장을 붙이지 않습니다 |
 | `image2` | 아니오 | 그 방만 추가로 보낼 이미지 |
 | `body2` | 아니오 | 그 방만 추가로 보낼 문구 |

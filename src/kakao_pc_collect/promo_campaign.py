@@ -40,6 +40,8 @@ class PromoRoom:
     image2: str
     body2: str
     url2: str
+    # [변경사유]: 예약 파일에서 방만 켜고 끈다. 생략은 true.
+    enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,21 @@ class RoomPlan:
 def sent_path_for(campaign_path: Path) -> Path:
     """캠페인 옆 기록. 성공한 방은 다음 실행에서 다시 보내지 않는다."""
     return campaign_path.with_name(campaign_path.name + ".sent.json")
+
+
+def _enabled_flag(value: object, *, room_id: str) -> bool:
+    """
+    방 전송 스위치. 생략하면 true.
+    true 일 때만 보내고, false 면 그 방은 건너뛴다.
+    [변경사유]: faluse 같은 오타는 문자라서 참으로 읽히지 않게 한다.
+    """
+    if value is None:
+        return True
+    if isinstance(value, bool):
+        return value
+    raise PromoCampaignError(
+        f"enabled 는 true 또는 false 여야 합니다: room={room_id} value={value!r}"
+    )
 
 
 def _clean(value: object) -> str:
@@ -148,6 +165,7 @@ def load_campaign(path: Path) -> PromoCampaign:
                 image2=_clean(item.get("image2")),
                 body2=_body_text(item.get("body2")),
                 url2=_clean(item.get("url2")),
+                enabled=_enabled_flag(item.get("enabled"), room_id=room_id),
             )
         )
     campaign_id = _clean(raw.get("id")) or path.stem
@@ -210,10 +228,20 @@ def build_plans(
             raise PromoCampaignError(
                 "캠페인에 없는 방 id: " + ", ".join(missing)
             )
-    if not wanted:
-        raise PromoCampaignError("보낼 방이 없습니다")
-    plans: list[RoomPlan] = []
+    active = []
     for room in wanted:
+        if room.enabled:
+            active.append(room)
+            continue
+        log.info("promo skip disabled room=%s", room.id)
+    if not active:
+        disabled = ", ".join(room.id for room in wanted if not room.enabled)
+        raise PromoCampaignError(
+            "enabled: true 인 방이 없습니다"
+            + (f" (꺼진 방: {disabled})" if disabled else "")
+        )
+    plans: list[RoomPlan] = []
+    for room in active:
         spec = by_id.get(room.id)
         if spec is None:
             raise PromoCampaignError(

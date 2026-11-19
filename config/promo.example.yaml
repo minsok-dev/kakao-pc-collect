@@ -14,6 +14,7 @@
 #   kakao-pc-collect promo --campaign data/promo/current.yaml
 # 작업 스케줄러는 10분마다 위 명령을 호출. send_at 전엔 보내지 않고, 성공한 방은 다시 보내지 않는다.
 # 다시 보내려면 같은 폴더의 current.yaml.sent.json 을 지우거나 --force
+# enabled: true 인 방만 전송. false 면 목록에 두고 건너뛴다. 생략하면 true.
 
 id: example-20261121
 send_at: "2026-11-21 10:00"
@@ -23,8 +24,10 @@ body: |
   일정과 장소는 아래 링크에서 확인하세요.
 rooms:
   - id: gangnam_latin
+    enabled: true
     url: "https://danceinfo.net/lessons"
   - id: hongdae_bonita
+    enabled: false
     url: "https://danceinfo.net/lessons"
     # 이 방만 두 번째 세트. image2 를 빼면 문구2·바로가기2만 나간다.
     image2: poster-extra.jpg

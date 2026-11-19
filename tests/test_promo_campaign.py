@@ -123,6 +123,68 @@ rooms:
     assert plans[0].steps[2].value == "\n- 한눈에 편하게!!!\n라틴 행사만 모아서 보세요~\n"
 
 
+def test_enabled_false_room_is_not_sent(tmp_path: Path) -> None:
+    path = _write_campaign(
+        tmp_path,
+        """
+body: "문구"
+rooms:
+  - id: gangnam_latin
+    enabled: true
+    url: "https://danceinfo.net/a"
+  - id: hongdae_bonita
+    enabled: false
+    url: "https://danceinfo.net/b"
+""",
+    )
+    plans = build_plans(load_campaign(path), _specs())
+    assert [plan.id for plan in plans] == ["gangnam_latin"]
+
+
+def test_enabled_omitted_still_sends(tmp_path: Path) -> None:
+    path = _write_campaign(
+        tmp_path,
+        """
+body: "문구"
+rooms:
+  - id: gangnam_latin
+    url: "https://danceinfo.net/a"
+""",
+    )
+    plans = build_plans(load_campaign(path), _specs())
+    assert [plan.id for plan in plans] == ["gangnam_latin"]
+
+
+def test_enabled_typo_is_rejected(tmp_path: Path) -> None:
+    path = _write_campaign(
+        tmp_path,
+        """
+body: "문구"
+rooms:
+  - id: gangnam_latin
+    enabled: faluse
+    url: "https://danceinfo.net/a"
+""",
+    )
+    with pytest.raises(PromoCampaignError, match="enabled"):
+        load_campaign(path)
+
+
+def test_all_rooms_disabled(tmp_path: Path) -> None:
+    path = _write_campaign(
+        tmp_path,
+        """
+body: "문구"
+rooms:
+  - id: gangnam_latin
+    enabled: false
+    url: "https://danceinfo.net/a"
+""",
+    )
+    with pytest.raises(PromoCampaignError, match="enabled: true"):
+        build_plans(load_campaign(path), _specs())
+
+
 def test_blank_optional_fields_are_omitted(tmp_path: Path) -> None:
     path = _write_campaign(
         tmp_path,
