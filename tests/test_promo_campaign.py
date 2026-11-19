@@ -10,7 +10,9 @@ import pytest
 
 from kakao_pc_collect.config import RoomSpec
 from kakao_pc_collect.promo_campaign import (
+    KAKAO_EDGE_BREAK,
     PromoCampaignError,
+    PromoStep,
     build_plans,
     load_campaign,
     load_sent,
@@ -19,7 +21,12 @@ from kakao_pc_collect.promo_campaign import (
     pending_plans,
     sent_path_for,
 )
-from kakao_pc_collect.promo_send import image_enter_hwnd, run_promo
+from kakao_pc_collect.promo_send import (
+    image_enter_hwnd,
+    link_step,
+    run_promo,
+    text_pause_seconds,
+)
 
 
 def _specs() -> list[RoomSpec]:
@@ -98,12 +105,12 @@ rooms:
 
 
 def test_body_blank_edges_stay_as_line_breaks(tmp_path: Path) -> None:
-    # [변경사유]: 첫 빈 줄은 | 로 남고, 마지막 빈 줄은 |+ 일 때만 남는다
+    # [변경사유]: `|` 의 끝 빈 줄도 남기고, 카톡이 지우는 앞뒤 빈 줄은 채움 글자로 보낸다
     path = _write_campaign(
         tmp_path,
         """
 image: ""
-body: |+
+body: |
 
   공통 첫줄
 
@@ -111,7 +118,7 @@ body: |+
 rooms:
   - id: gangnam_latin
     url: "https://danceinfo.net/a"
-    body2: |+
+    body2: |
 
       - 한눈에 편하게!!!
       라틴 행사만 모아서 보세요~
@@ -119,8 +126,24 @@ rooms:
 """,
     )
     plans = build_plans(load_campaign(path), _specs())
-    assert plans[0].steps[0].value == "\n공통 첫줄\n\n공통 끝"
-    assert plans[0].steps[2].value == "\n- 한눈에 편하게!!!\n라틴 행사만 모아서 보세요~\n"
+    blank = KAKAO_EDGE_BREAK
+    assert plans[0].steps[0].value == f"{blank}\n공통 첫줄\n\n공통 끝"
+    assert plans[0].steps[2].value == (
+        f"{blank}\n- 한눈에 편하게!!!\n라틴 행사만 모아서 보세요~\n{blank}"
+    )
+
+
+def test_link_step_waits_before_next_bubble() -> None:
+    # [변경사유]: 주소 직후 다음 붙여넣기가 미리보기 중인 주소를 지웠다
+    url = PromoStep("url", "text", "https://danceinfo.net/a")
+    body = PromoStep("body", "text", "문구")
+    assert link_step(url)
+    assert link_step(PromoStep("url2", "text", "https://danceinfo.net/b"))
+    assert not link_step(body)
+    url_before, url_after = text_pause_seconds(url)
+    body_before, body_after = text_pause_seconds(body)
+    assert url_before > body_before
+    assert url_after > body_after
 
 
 def test_enabled_false_room_is_not_sent(tmp_path: Path) -> None:

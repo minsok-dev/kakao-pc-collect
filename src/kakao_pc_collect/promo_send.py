@@ -32,6 +32,9 @@ IMAGE_BEFORE_ENTER_SEC = 1.0
 IMAGE_AFTER_ENTER_SEC = 1.2
 TEXT_BEFORE_ENTER_SEC = 0.25
 TEXT_AFTER_ENTER_SEC = 0.55
+# [변경사유]: 주소는 링크 미리보기가 붙는 동안 다음 붙여넣기가 입력칸을 지웠다.
+URL_BEFORE_ENTER_SEC = 1.2
+URL_AFTER_ENTER_SEC = 1.6
 BETWEEN_ROOMS_SEC = 2.0
 # [변경사유]: 카톡이 클립보드 사진을 이 창으로 열고, Enter 가 전송이다.
 CLIPBOARD_IMAGE_TITLE = "클립보드 이미지 전송"
@@ -161,6 +164,18 @@ def _wait_clipboard_dialog_closed() -> None:
     log.warning("promo clipboard image dialog still open")
 
 
+def link_step(step: PromoStep) -> bool:
+    """바로가기 말풍선. 본문에 들어 있는 주소는 여기 포함하지 않는다."""
+    return step.kind == "text" and step.label in ("url", "url2")
+
+
+def text_pause_seconds(step: PromoStep) -> tuple[float, float]:
+    """붙여넣기 뒤 Enter 전·후 대기(초). 주소는 미리보기 때문에 더 기다린다."""
+    if link_step(step):
+        return URL_BEFORE_ENTER_SEC, URL_AFTER_ENTER_SEC
+    return TEXT_BEFORE_ENTER_SEC, TEXT_AFTER_ENTER_SEC
+
+
 def send_step_to_room(hwnd: int, step: PromoStep, coords: Any) -> None:
     """
     말풍선 하나.
@@ -185,10 +200,17 @@ def send_step_to_room(hwnd: int, step: PromoStep, coords: Any) -> None:
     else:
         if not paste_into_hwnd(hwnd, step.value):
             raise RuntimeError("text_paste_failed")
-        time.sleep(TEXT_BEFORE_ENTER_SEC)
+        before_enter, after_enter = text_pause_seconds(step)
+        time.sleep(before_enter)
         if not press_enter_if_foreground(hwnd):
             raise RuntimeError("enter_failed")
-    time.sleep(IMAGE_AFTER_ENTER_SEC if step.kind == "image" else TEXT_AFTER_ENTER_SEC)
+        time.sleep(after_enter)
+        # [변경사유]: 미리보기 로딩 중 첫 Enter 가 전송이 아니면 주소가 입력칸에 남는다.
+        if link_step(step) and press_enter_if_foreground(hwnd):
+            log.info("promo link enter confirm step=%s", step.label)
+            time.sleep(0.35)
+    if step.kind == "image":
+        time.sleep(IMAGE_AFTER_ENTER_SEC)
     if step.kind == "image":
         log.info("promo sent step=%s kind=image file=%s", step.label, Path(step.value).name)
     else:

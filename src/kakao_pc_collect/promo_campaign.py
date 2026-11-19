@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -88,18 +89,56 @@ def _clean(value: object) -> str:
     return str(value).strip()
 
 
+# [변경사유]: 카톡은 말풍선 맨 앞·맨 뒤의 빈 줄을 지운다. 한글 채움은 빈 줄로 남는다.
+KAKAO_EDGE_BREAK = "\u3164"
+
+# body / body2 의 `|` 는 마지막 빈 줄을 파서가 버린다. `|+` 만 그 줄을 남긴다.
+_BODY_CLIP = re.compile(
+    r"^([ \t]*body2?:[ \t]*)\|([ \t]*(?:#.*)?)[ \t]*\r?$",
+    re.MULTILINE,
+)
+
+
+def _preserve_body_block_breaks(raw: str) -> str:
+    """
+    body·body2 블록의 `|` 를 `|+` 로 읽어 마지막 빈 줄을 유지한다.
+    [변경사유]: `|` 는 끝 빈 줄을 파서에 넘기기 전에 잘라 낸다.
+    """
+
+    def _keep(match: re.Match[str]) -> str:
+        return f"{match.group(1)}|+{match.group(2)}"
+
+    return _BODY_CLIP.sub(_keep, raw)
+
+
+def _keep_visible_edge_breaks(text: str) -> str:
+    """맨 앞·맨 뒤 빈 줄만 카톡이 지우지 못하는 글자로 바꾼다. 가운데 빈 줄은 그대로."""
+    if not text:
+        return ""
+    lines = text.split("\n")
+    start = 0
+    while start < len(lines) and lines[start].strip() == "":
+        lines[start] = KAKAO_EDGE_BREAK
+        start += 1
+    end = len(lines) - 1
+    while end >= start and lines[end].strip() == "":
+        lines[end] = KAKAO_EDGE_BREAK
+        end -= 1
+    return "\n".join(lines)
+
+
 def _body_text(value: object) -> str:
     """
-    홍보 문구. 앞에 둔 빈 줄은 줄바꿈으로 남긴다.
-    YAML `|` 가 항상 붙이는 끝 개행 1개만 뺀다. `|+` 의 추가 빈 줄은 남긴다.
-    [변경사유]: strip 은 첫줄·마지막 줄바꿈까지 지웠다.
+    홍보 문구. 앞에 둔 빈 줄과 `|+` 의 끝 빈 줄은 줄바꿈으로 남긴다.
+    YAML 이 항상 붙이는 끝 개행 1개만 뺀다.
+    [변경사유]: strip 은 첫줄·마지막 줄바꿈까지 지웠고, 카톡은 남은 빈 줄도 지운다.
     """
     if value is None:
         return ""
     text = str(value).replace("\r\n", "\n").replace("\r", "\n")
     if text.endswith("\n"):
         text = text[:-1]
-    return text
+    return _keep_visible_edge_breaks(text)
 
 
 def _as_local_datetime(raw: object) -> datetime | None:
@@ -141,7 +180,9 @@ def load_campaign(path: Path) -> PromoCampaign:
     path = path.resolve()
     if not path.is_file():
         raise PromoCampaignError(f"캠페인 파일 없음: {path}")
-    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    # [변경사유]: body/body2 의 `|` 가 마지막 빈 줄을 버리므로 읽기 전에 `|+` 로 맞춘다.
+    raw_text = _preserve_body_block_breaks(path.read_text(encoding="utf-8"))
+    raw = yaml.safe_load(raw_text) or {}
     if not isinstance(raw, dict):
         raise PromoCampaignError("캠페인 파일은 YAML 객체여야 합니다")
     rooms_raw = raw.get("rooms") or []
