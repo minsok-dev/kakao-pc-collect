@@ -43,10 +43,11 @@ def image_enter_hwnd(
     foreground_hwnd: int,
     foreground_title: str,
     dialog_hwnd: int | None,
+    foreground_same_process: bool = False,
 ) -> int | None:
     """
     사진 붙여넣기 뒤 Enter 를 받을 창.
-    클립보드 이미지 전송 창이 있으면 그 창. 아직 방 창이 전경이면 방.
+    제목이 있는 전송 창, 제목이 비어 있는 카톡 팝업, 아직 전경인 방 창 순이다.
     """
     if dialog_hwnd:
         return int(dialog_hwnd)
@@ -54,7 +55,27 @@ def image_enter_hwnd(
         return int(foreground_hwnd)
     if foreground_hwnd and int(foreground_hwnd) == int(room_hwnd):
         return int(room_hwnd)
+    # [변경사유]: 실측 — 클립보드 전송 창은 제목이 빈 문자열이고 카톡 프로세스다.
+    title = (foreground_title or "").strip()
+    if (
+        foreground_same_process
+        and foreground_hwnd
+        and int(foreground_hwnd) != int(room_hwnd)
+        and not title
+    ):
+        return int(foreground_hwnd)
     return None
+
+
+def _same_process(hwnd_a: int, hwnd_b: int) -> bool:
+    """두 창이 같은 프로세스면 카톡이 띄운 팝업으로 본다."""
+    import win32process
+
+    if not hwnd_a or not hwnd_b:
+        return False
+    _thread_a, pid_a = win32process.GetWindowThreadProcessId(int(hwnd_a))
+    _thread_b, pid_b = win32process.GetWindowThreadProcessId(int(hwnd_b))
+    return bool(pid_a) and pid_a == pid_b
 
 
 def _message_input_xy(hwnd: int, coords: Any) -> tuple[int, int]:
@@ -103,6 +124,7 @@ def _confirm_pasted_image(room_hwnd: int) -> None:
             foreground_hwnd=fg,
             foreground_title=title,
             dialog_hwnd=int(dialog) if dialog else None,
+            foreground_same_process=_same_process(fg, room_hwnd),
         )
         if target is None:
             time.sleep(0.15)

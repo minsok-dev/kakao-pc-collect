@@ -318,6 +318,27 @@ def test_image_enter_goes_to_clipboard_dialog() -> None:
         )
         is None
     )
+    # [변경사유]: 전송 창 제목이 비어 있으면 같은 프로세스일 때만 Enter
+    assert (
+        image_enter_hwnd(
+            room_hwnd=10,
+            foreground_hwnd=99,
+            foreground_title="",
+            dialog_hwnd=None,
+            foreground_same_process=True,
+        )
+        == 99
+    )
+    assert (
+        image_enter_hwnd(
+            room_hwnd=10,
+            foreground_hwnd=99,
+            foreground_title="",
+            dialog_hwnd=None,
+            foreground_same_process=False,
+        )
+        is None
+    )
 
 
 def test_missing_image_helper(tmp_path: Path) -> None:
