@@ -5,6 +5,7 @@
 | 항목 | 내용 |
 |------|------|
 | 기준일 | 2026-11-20 |
+| 운영 설명서 | [promo-operator-guide.md](promo-operator-guide.md) |
 | 명령 | `kakao-pc-collect promo` |
 | 예시 | `config/promo.example.yaml` |
 | 단위 테스트 | `tests/test_promo_campaign.py` (10개). 전체 `pytest` 75 passed |

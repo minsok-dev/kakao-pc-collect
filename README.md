@@ -12,7 +12,7 @@ kakao-import-local/input/raw/<room_id>/non_posters/KakaoTalk_*   ← import가 �
 계약·실측: [kakao-pc-collect-plan.md](../kakao-import-local/docs/kakao-pc-collect-plan.md)  
 포스터 분류: [poster-classifier-plan.md](../kakao-import-local/docs/poster-classifier-plan.md)  
 스케줄 자동 upload · similar hold · 포스터 재학습: [schedule-auto-upload-and-poster-retrain-design.md](../kakao-import-local/docs/schedule-auto-upload-and-poster-retrain-design.md) §11  
-단톡 홍보 예약: [promo-schedule.md](docs/promo-schedule.md)
+단톡 홍보 예약: 운영 [promo-operator-guide.md](docs/promo-operator-guide.md) · 구현 기록 [promo-schedule.md](docs/promo-schedule.md)
 
 ## 하는 일
 
@@ -108,7 +108,7 @@ upload용으로 시각만 어긋난 별도 스케줄은 쓰지 않는다.
 ## 단톡 홍보 예약
 
 수집과 **따로** 실행한다. 같은 시각에 돌리면 카카오톡 창 클릭이 겹친다.  
-순서·예약·재전송·단위 테스트 범위는 [docs/promo-schedule.md](docs/promo-schedule.md).
+운영 절차는 [docs/promo-operator-guide.md](docs/promo-operator-guide.md). 구현·단위 테스트 범위는 [docs/promo-schedule.md](docs/promo-schedule.md).
 
 `config/promo.example.yaml` 을 `data/promo/current.yaml` 로 복사한 뒤 이미지·문구·방별 URL·`send_at` 만 바꾼다.  
 방 id 는 `config/rooms.yaml` 과 같아야 한다.
