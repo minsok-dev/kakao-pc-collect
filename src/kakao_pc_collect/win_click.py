@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Any
 
 from kakao_pc_collect.logging_util import get_logger
@@ -377,3 +378,93 @@ def paste_unicode(text: str) -> None:
 
     set_clipboard_text(text)
     send_keys("^v")
+
+
+def ctrl_v_if_foreground(hwnd: int) -> bool:
+    """
+    클립보드는 호출자가 채운 뒤, 전경이 hwnd 일 때만 Ctrl+V.
+    [변경사유]: 홍보 사진은 텍스트 붙여넣기와 달리 클립보드를 비우면 안 됨.
+    """
+    import win32api
+    import win32con
+    import win32gui
+
+    bring_to_front(hwnd)
+    fg = win32gui.GetForegroundWindow()
+    if int(fg) != int(hwnd):
+        log.warning(
+            "ctrl_v skipped — foreground is not target fg=%s title=%r",
+            fg,
+            window_title(int(fg)) if fg else "",
+        )
+        return False
+    time.sleep(0.08)
+    win32api.keybd_event(win32con.VK_CONTROL, 0, 0, 0)
+    win32api.keybd_event(ord("V"), 0, 0, 0)
+    time.sleep(0.04)
+    win32api.keybd_event(ord("V"), 0, win32con.KEYEVENTF_KEYUP, 0)
+    win32api.keybd_event(win32con.VK_CONTROL, 0, win32con.KEYEVENTF_KEYUP, 0)
+    log.info("ctrl_v_if_foreground ok hwnd=%s", hwnd)
+    return True
+
+
+def press_enter_if_foreground(hwnd: int) -> bool:
+    """전경이 hwnd 일 때만 Enter. 다른 창에 전송되지 않게."""
+    import win32api
+    import win32con
+    import win32gui
+
+    if int(win32gui.GetForegroundWindow()) != int(hwnd):
+        log.warning("enter skipped — not foreground hwnd=%s", hwnd)
+        return False
+    win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
+    time.sleep(0.04)
+    win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+    log.info("press_enter_if_foreground ok hwnd=%s", hwnd)
+    return True
+
+
+# [변경사유]: 카톡 클립보드 붙여넣기용. 긴 변만 줄이고 원본 파일은 그대로 둔다.
+PROMO_IMAGE_MAX_EDGE = 1920
+
+
+def set_clipboard_image(path: Path) -> tuple[int, int]:
+    """
+    PNG/JPEG/WEBP/BMP → CF_DIB.
+    카톡 입력칸 Ctrl+V 가 사진 말풍선으로 들어가게 한다.
+    반환은 클립보드에 넣은 가로·세로.
+    """
+    import io
+
+    import win32clipboard
+    import win32con
+    from PIL import Image
+
+    image = Image.open(path)
+    image = image.convert("RGB")
+    width, height = image.size
+    edge = max(width, height)
+    if edge > PROMO_IMAGE_MAX_EDGE:
+        scale = PROMO_IMAGE_MAX_EDGE / float(edge)
+        width = max(1, int(width * scale))
+        height = max(1, int(height * scale))
+        image = image.resize((width, height), Image.Resampling.LANCZOS)
+        log.info(
+            "clipboard image resized file=%s edge=%s -> %sx%s",
+            path.name,
+            edge,
+            width,
+            height,
+        )
+    output = io.BytesIO()
+    image.save(output, "BMP")
+    # BITMAPFILEHEADER 14바이트를 빼면 CF_DIB 가 받는 DIB
+    dib = output.getvalue()[14:]
+    win32clipboard.OpenClipboard()
+    try:
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardData(win32con.CF_DIB, dib)
+    finally:
+        win32clipboard.CloseClipboard()
+    log.info("clipboard image set file=%s size=%sx%s", path.name, width, height)
+    return width, height

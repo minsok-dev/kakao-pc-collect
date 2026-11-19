@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import time
+from pathlib import Path
 
 import click
 
@@ -118,6 +119,56 @@ def cmd_notify_test(
     click.echo(json.dumps(out, ensure_ascii=False, indent=2))
     if not out.get("ok"):
         raise click.ClickException(str(out.get("error") or "notify-test failed"))
+
+
+@main.command("promo")
+@click.option(
+    "--campaign",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="홍보 YAML. 예: data/promo/current.yaml",
+)
+@click.option("--dry-run", is_flag=True, help="카톡을 열지 않고 말풍선 순서만 출력")
+@click.option("--force", is_flag=True, help="이미 성공한 방도 다시 전송")
+@click.option("--now", "ignore_schedule", is_flag=True, help="send_at 이전이어도 지금 전송")
+@click.option(
+    "--room",
+    "rooms",
+    multiple=True,
+    help="캠페인 안 이 방 id 만. 생략 시 캠페인 rooms 전체",
+)
+@click.pass_context
+def cmd_promo(
+    ctx: click.Context,
+    campaign: Path,
+    dry_run: bool,
+    force: bool,
+    ignore_schedule: bool,
+    rooms: tuple[str, ...],
+) -> None:
+    """
+    단톡 홍보. 방마다 이미지 → 문구 → 바로가기, 방에 값이 있으면 이미지2 → 문구2 → 바로가기2.
+    수집·완료 알림과는 별도 실행. send_at 전엔 나가지 않고, 성공한 방은 기록 후 다시 보내지 않는다.
+    """
+    from kakao_pc_collect.promo_campaign import PromoCampaignError
+    from kakao_pc_collect.promo_send import run_promo
+
+    settings = ctx.obj["settings"]
+    try:
+        out = run_promo(
+            campaign,
+            settings.rooms,
+            coords=settings.coords,
+            dry_run=dry_run,
+            force=force,
+            ignore_schedule=ignore_schedule,
+            only_ids=set(rooms) if rooms else None,
+        )
+    except PromoCampaignError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(json.dumps(out, ensure_ascii=False, indent=2))
+    if not out.get("ok"):
+        raise click.ClickException(str(out.get("status") or "promo failed"))
 
 
 @main.command("calibrate")

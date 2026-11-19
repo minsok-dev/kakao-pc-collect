@@ -11,7 +11,8 @@ kakao-import-local/input/raw/<room_id>/non_posters/KakaoTalk_*   ← import가 �
 
 계약·실측: [kakao-pc-collect-plan.md](../kakao-import-local/docs/kakao-pc-collect-plan.md)  
 포스터 분류: [poster-classifier-plan.md](../kakao-import-local/docs/poster-classifier-plan.md)  
-스케줄 자동 upload · similar hold · 포스터 재학습: [schedule-auto-upload-and-poster-retrain-design.md](../kakao-import-local/docs/schedule-auto-upload-and-poster-retrain-design.md) §11
+스케줄 자동 upload · similar hold · 포스터 재학습: [schedule-auto-upload-and-poster-retrain-design.md](../kakao-import-local/docs/schedule-auto-upload-and-poster-retrain-design.md) §11  
+단톡 홍보 예약: [promo-schedule.md](docs/promo-schedule.md)
 
 ## 하는 일
 
@@ -103,6 +104,30 @@ kakao-pc-collect run --with-upload
 
 `upload`는 import(run → poster-classify → similar-detect)가 **끝난 뒤** 같은 실행에서 호출된다.  
 upload용으로 시각만 어긋난 별도 스케줄은 쓰지 않는다.
+
+## 단톡 홍보 예약
+
+수집과 **따로** 실행한다. 같은 시각에 돌리면 카카오톡 창 클릭이 겹친다.  
+순서·예약·재전송·단위 테스트 범위는 [docs/promo-schedule.md](docs/promo-schedule.md).
+
+`config/promo.example.yaml` 을 `data/promo/current.yaml` 로 복사한 뒤 이미지·문구·방별 URL·`send_at` 만 바꾼다.  
+방 id 는 `config/rooms.yaml` 과 같아야 한다.
+
+말풍선 순서 (값 있는 것만):
+
+1. 공통 이미지
+2. 공통 홍보 문구
+3. 그 방 바로가기 URL
+4. 그 방 추가 이미지 (`image2`, 없으면 생략)
+5. 그 방 추가 문구 (`body2`)
+6. 그 방 추가 바로가기 (`url2`)
+
+```text
+kakao-pc-collect promo --campaign data/promo/current.yaml --dry-run
+kakao-pc-collect promo --campaign data/promo/current.yaml
+```
+
+작업 스케줄러는 10분마다 두 번째 명령을 호출하면 된다. `send_at` 전에는 보내지 않고, 성공한 방은 `current.yaml.sent.json` 에 남아 다시 나가지 않는다. 재전송은 그 파일을 지우거나 `--force`.
 
 ## 환경 변수
 

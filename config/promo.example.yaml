@@ -1,0 +1,33 @@
+# [변경사유]: 단톡 홍보 예약 예시. 실제 파일은 data/promo/ 에 복사해 이미지·문구·시각만 바꾼다.
+# 수집 스케줄과 같은 시각에 실행하지 않는다. 카카오톡 PC 창을 같이 집기 때문이다.
+#
+# 방 하나에서 나가는 말풍선 순서 (값이 있는 것만):
+#   1. image  공통 이미지
+#   2. body   공통 홍보 문구
+#   3. url    그 방 바로가기 (URL 만 — 카톡 링크 미리보기)
+#   4. image2 이 방만 추가 이미지 (없으면 생략)
+#   5. body2  이 방만 추가 문구
+#   6. url2   이 방만 추가 바로가기
+#
+# 실행:
+#   kakao-pc-collect promo --campaign data/promo/current.yaml --dry-run
+#   kakao-pc-collect promo --campaign data/promo/current.yaml
+# 작업 스케줄러는 10분마다 위 명령을 호출. send_at 전엔 보내지 않고, 성공한 방은 다시 보내지 않는다.
+# 다시 보내려면 같은 폴더의 current.yaml.sent.json 을 지우거나 --force
+
+id: example-20261121
+send_at: "2026-11-21 10:00"
+image: poster.jpg
+body: |
+  11월 넷째 주 강습·파티 안내입니다.
+  일정과 장소는 아래 링크에서 확인하세요.
+rooms:
+  - id: gangnam_latin
+    url: "https://danceinfo.net/lessons"
+  - id: hongdae_bonita
+    url: "https://danceinfo.net/lessons"
+    # 이 방만 두 번째 세트. image2 를 빼면 문구2·바로가기2만 나간다.
+    image2: poster-extra.jpg
+    body2: |
+      이 방 추가 안내입니다.
+    url2: "https://danceinfo.net/"

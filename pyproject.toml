@@ -17,6 +17,8 @@ dependencies = [
   "pywinauto>=0.6.8",
   "pywin32>=306",
   "PyYAML>=6.0",
+  # [변경사유]: 홍보 이미지를 CF_DIB 로 넣어 카톡 입력칸에 사진으로 붙여넣기
+  "Pillow>=10.0",
 ]
 
 [project.optional-dependencies]
