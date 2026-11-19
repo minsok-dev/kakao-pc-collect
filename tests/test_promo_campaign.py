@@ -97,6 +97,32 @@ rooms:
     assert [step.label for step in plans[0].steps] == ["body", "url", "body2", "url2"]
 
 
+def test_body_blank_edges_stay_as_line_breaks(tmp_path: Path) -> None:
+    # [변경사유]: 첫 빈 줄은 | 로 남고, 마지막 빈 줄은 |+ 일 때만 남는다
+    path = _write_campaign(
+        tmp_path,
+        """
+image: ""
+body: |+
+
+  공통 첫줄
+
+  공통 끝
+rooms:
+  - id: gangnam_latin
+    url: "https://danceinfo.net/a"
+    body2: |+
+
+      - 한눈에 편하게!!!
+      라틴 행사만 모아서 보세요~
+
+""",
+    )
+    plans = build_plans(load_campaign(path), _specs())
+    assert plans[0].steps[0].value == "\n공통 첫줄\n\n공통 끝"
+    assert plans[0].steps[2].value == "\n- 한눈에 편하게!!!\n라틴 행사만 모아서 보세요~\n"
+
+
 def test_blank_optional_fields_are_omitted(tmp_path: Path) -> None:
     path = _write_campaign(
         tmp_path,

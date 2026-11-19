@@ -71,6 +71,20 @@ def _clean(value: object) -> str:
     return str(value).strip()
 
 
+def _body_text(value: object) -> str:
+    """
+    홍보 문구. 앞에 둔 빈 줄은 줄바꿈으로 남긴다.
+    YAML `|` 가 항상 붙이는 끝 개행 1개만 뺀다. `|+` 의 추가 빈 줄은 남긴다.
+    [변경사유]: strip 은 첫줄·마지막 줄바꿈까지 지웠다.
+    """
+    if value is None:
+        return ""
+    text = str(value).replace("\r\n", "\n").replace("\r", "\n")
+    if text.endswith("\n"):
+        text = text[:-1]
+    return text
+
+
 def _as_local_datetime(raw: object) -> datetime | None:
     """send_at. YAML 이 datetime/date 로 읽어도, 문자열이면 로컬 시각으로 받는다."""
     if raw is None:
@@ -132,7 +146,7 @@ def load_campaign(path: Path) -> PromoCampaign:
                 id=room_id,
                 url=_clean(item.get("url")),
                 image2=_clean(item.get("image2")),
-                body2=_clean(item.get("body2")),
+                body2=_body_text(item.get("body2")),
                 url2=_clean(item.get("url2")),
             )
         )
@@ -142,7 +156,7 @@ def load_campaign(path: Path) -> PromoCampaign:
         campaign_id=campaign_id,
         send_at=_as_local_datetime(raw.get("send_at")),
         image=_clean(raw.get("image")),
-        body=_clean(raw.get("body")),
+        body=_body_text(raw.get("body")),
         rooms=tuple(rooms),
     )
     log.info(
